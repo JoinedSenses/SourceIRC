@@ -27,6 +27,9 @@ new Handle:g_cvAllowHide;
 new Handle:g_cvAllowFilter;
 new Handle:g_cvHideDisconnect
 
+Handle g_cvarPctRequired;
+Handle g_cvarMinLength;
+
 public Plugin:myinfo = {
 	name = "SourceIRC -> Relay All",
 	author = "Azelphur",
@@ -37,7 +40,7 @@ public Plugin:myinfo = {
 
 public OnPluginStart() {	
 	HookEvent("player_disconnect", Event_PlayerDisconnect, EventHookMode_Post);
-	HookEvent("player_changename", Event_PlayerChangeName, EventHookMode_Post);
+	//HookEvent("player_changename", Event_PlayerChangeName, EventHookMode_Post);
 	HookEvent("player_say", Event_PlayerSay, EventHookMode_Post);
 	HookEvent("player_chat", Event_PlayerSay, EventHookMode_Post);
 
@@ -46,8 +49,11 @@ public OnPluginStart() {
 	RegConsoleCmd("say_team", Command_SayTeam);
 	RegConsoleCmd("sm_irc", cmdIRC, "Toggles IRC chat");
 	g_cvAllowHide = CreateConVar("irc_allow_hide", "0", "Sets whether players can hide IRC chat", FCVAR_NOTIFY);
-	g_cvAllowFilter = CreateConVar("irc_allow_filter", "0", "Sets whether IRC filters sentences beginning with !", FCVAR_NOTIFY);
+	g_cvAllowFilter = CreateConVar("irc_allow_filter", "0", "Sets whether IRC filters messages beginning with !", FCVAR_NOTIFY);
 	g_cvHideDisconnect = CreateConVar("irc_disconnect_filter", "0", "Sets whether IRC filters disconnect messages", FCVAR_NOTIFY);
+	
+	g_cvarPctRequired = CreateConVar("anti_caps_lock_percent", "0.9", "Force all letters to lowercase when this percent of letters is uppercase (not counting symbols)", _, true, 0.0, true, 1.0);
+	g_cvarMinLength = CreateConVar("anti_caps_lock_min_length", "5", "Only force letters to lowercase when a message has at least this many letters (not counting symbols)", _, true, 0.0);
 	
 	LoadTranslations("sourceirc.phrases");
 }
@@ -95,7 +101,26 @@ public Action:Event_PlayerSay(Handle:event, const String:name[], bool:dontBroadc
 	if (client != 0 && !IsPlayerAlive(client))
 		StrCat(result, sizeof(result), "*DEAD* ");
 	if (g_isteam)
-		StrCat(result, sizeof(result), "(TEAM) ");		
+		StrCat(result, sizeof(result), "(TEAM) ");	
+
+	int letters, uppercase, length = strlen(message);
+	for(int i = 0; i < length; i++) {
+		if(message[i] >= 'A' && message[i] <= 'Z') {
+			uppercase++;
+			letters++;
+		} else if(message[i] >= 'a' && message[i] <= 'z') {
+			letters++;
+		}
+	}
+	
+	if(letters >= GetConVarInt(g_cvarMinLength) && float(uppercase) / float(letters) >= GetConVarFloat(g_cvarPctRequired)) {
+		// Force to lowercase
+		for(int i = 0; i < length; i++) {
+			if(message[i] >= 'A' && message[i] <= 'Z') {
+				message[i] = CharToLower(message[i]);
+			}
+		}
+	}
 	new team
 	if (client != 0)
 		team = IRC_GetTeamColor(GetClientTeam(client));
@@ -110,8 +135,12 @@ public Action:Event_PlayerSay(Handle:event, const String:name[], bool:dontBroadc
 }
 
 
-public void OnClientAuthorized(client, const String:auth[]) { // We are hooking this instead of the player_connect event as we want the steamid
+public void OnClientPutInServer(client) { // We are hooking this instead of the player_connect event as we want the steamid
 	new userid = GetClientUserId(client);
+	decl String:auth[64];
+	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
+	if (IsFakeClient(client))
+		return;
 	if (userid <= g_userid) // Ugly hack to get around mass connects on map change
 		return;
 	g_userid = userid;
@@ -123,6 +152,7 @@ public void OnClientAuthorized(client, const String:auth[]) { // We are hooking 
 	return;
 }
 
+
 public Action:Event_PlayerDisconnect(Handle:event, const String:name[], bool:dontBroadcast)
 {	
 	if (!GetConVarBool(g_cvHideDisconnect)) {
@@ -132,7 +162,7 @@ public Action:Event_PlayerDisconnect(Handle:event, const String:name[], bool:don
 			decl String:reason[128], String:playername[MAX_NAME_LENGTH], String:auth[64], String:result[IRC_MAXLEN];
 			GetEventString(event, "reason", reason, sizeof(reason));
 			GetClientName(client, playername, sizeof(playername));
-			GetClientAuthString(client, auth, sizeof(auth));
+			GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
 			for (new i = 0; i <= strlen(reason); i++) { // For some reason, certain disconnect reasons have \n in them, so i'm stripping them. Silly valve.
 				if (reason[i] == '\n')
 					RemoveChar(reason, sizeof(reason), i);
@@ -144,20 +174,24 @@ public Action:Event_PlayerDisconnect(Handle:event, const String:name[], bool:don
 	}
 }
 
-public Action:Event_PlayerChangeName(Handle:event, const String:name[], bool:dontBroadcast)
-{
-	new userid = GetEventInt(event, "userid");
-	new client = GetClientOfUserId(userid);
-	if (client != 0) {
-		decl String:oldname[128], String:newname[MAX_NAME_LENGTH], String:auth[64], String:result[IRC_MAXLEN];
-		GetEventString(event, "oldname", oldname, sizeof(oldname));
-		GetEventString(event, "newname", newname, sizeof(newname));
-		GetClientAuthString(client, auth, sizeof(auth));
-		Format(result, sizeof(result), "%t", "Changed Name", oldname, auth, userid, newname);
-		if (!StrEqual(result, ""))
-			IRC_MsgFlaggedChannels("relay", result);
-	}
-}
+//public Action:Event_PlayerChangeName(Handle:event, const String:name[], bool:dontBroadcast)
+//{
+//	new userid = GetEventInt(event, "userid");
+//	new client = GetClientOfUserId(userid);
+//	if (client != 0) {
+//		decl String:oldname[128], String:newname[MAX_NAME_LENGTH], String:auth[64], String:result[IRC_MAXLEN];
+//		GetEventString(event, "oldname", oldname, sizeof(oldname));
+//		GetEventString(event, "newname", newname, sizeof(newname));
+//		GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
+//		Format(result, sizeof(result), "%t", "Changed Name", oldname, auth, userid, newname);
+//		if (StrEqual(oldname, newname))
+//		{
+//			return Plugin_Continue;
+//		}
+//		if (!StrEqual(result, ""))
+//			IRC_MsgFlaggedChannels("relay", result);
+//	}
+//}
 
 public OnMapEnd() {
 	IRC_MsgFlaggedChannels("relay", "%t", "Map Changing");
@@ -181,14 +215,15 @@ public Action:Event_PRIVMSG(const String:hostmask[], args) {
 		decl String:nick[IRC_NICK_MAXLEN], String:text[IRC_MAXLEN];
 		IRC_GetNickFromHostMask(hostmask, nick, sizeof(nick));
 		IRC_GetEventArg(2, text, sizeof(text));
+
 		if (!strncmp(text, "\x01ACTION ", 8) && text[strlen(text)-1] == '\x01') {
 			text[strlen(text)-1] = '\x00';
 			IRC_Strip(text, sizeof(text)); // Strip IRC Color Codes
 			IRC_StripGame(text, sizeof(text)); // Strip Game color codes
-			
-			for (new i=1; i<=MaxClients; i++) {
-				if (IsClientInGame(i) && !IsFakeClient(i) && g_bShowIRC[i]) {
-				PrintToChat(i, "\x01[\x04IRC\x01] * %s %s", nick, text[7]);
+
+			for (new i=1; i<=MaxClients; i++) {		
+				if (IsClientInGame(i) && !IsFakeClient(i) && g_bShowIRC[i]) {				
+				PrintToChat(i, "\x01[\x03IRC\x01] * %s %s", nick, text[7]);
 				}
 			}
 		}
@@ -198,7 +233,7 @@ public Action:Event_PRIVMSG(const String:hostmask[], args) {
 			
 			for (new i=1; i<=MaxClients; i++) {
 				if (IsClientInGame(i) && !IsFakeClient(i) && g_bShowIRC[i]) {
-				PrintToChat(i, "\x01[\x04IRC\x01] %s :  %s", nick, text);
+				PrintToChat(i, "\x01[\x03IRC\x01] %s :  %s", nick, text);
 				}
 			}
 		}
@@ -210,13 +245,12 @@ public Action:cmdIRC(iClient, iArgC) {
 		g_bShowIRC[iClient] = !g_bShowIRC[iClient]; // Flip boolean
 		if (g_bShowIRC[iClient]) {
 			ReplyToCommand(iClient, "[SourceIRC] Now listening to IRC chat");
-		} 
-		else {
+		} else {
 			ReplyToCommand(iClient, "[SourceIRC] Stopped listening to IRC chat");
 		}
-	}
+    }
 	else {
-		PrintToChat(iClient, "\x01[\x04IRC\x01] IRC Hide not allowed for this server");
+		PrintToChat(iClient, "\x01[\x03IRC\x01] IRC Hide not allowed for this server");
 	}
 	return Plugin_Handled;
 }
