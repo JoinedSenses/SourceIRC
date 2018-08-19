@@ -20,11 +20,11 @@
 #include <socket>
 #include <sourceirc>
 
-// Global socket handle for the IRC connection
 Handle
+	// Global socket handle for the IRC connection
 	gsocket;
-// Global keyvalues handle for the config file
 KeyValues
+	// Global keyvalues handle for the config file
 	kv;
 ArrayList
 	// Command registry for plugins using IRC_Reg*Cmd
@@ -42,24 +42,24 @@ ArrayList
 	, messagequeue
 	// Temporary storage for command and event arguments
 	, cmdargs;
-// Queue for rate limiting	
 Handle
+	// Queue for rate limiting	
 	messagetimer;
 float
 	messagerate;
-// Temporary storage for command and event arguments
 char
+	// Temporary storage for command and event arguments
 	cmdargstring[IRC_MAXLEN]
 	, cmdhostmask[IRC_MAXLEN]
 	// My nickname
 	, g_nick[IRC_NICK_MAXLEN]
 	// IRC can break messages into more than one packet, so this is temporary storage for "Broken" packets
 	, brokenline[IRC_MAXLEN];
-// Are we connected yet?
 bool
+	// Are we connected yet?
 	g_connected;
-// Debug mode.
 int
+	// Debug mode.
 	g_debug;
 
 public Plugin myinfo = {
