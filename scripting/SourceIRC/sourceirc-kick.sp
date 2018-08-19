@@ -14,133 +14,122 @@
     You should have received a copy of the GNU General Public License
     along with SourceIRC.  If not, see <http://www.gnu.org/licenses/>.
 */
-
+#pragma newdecls required
+#pragma semicolon 1
+#pragma dynamic 65535
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
 
-#pragma semicolon 1
-#pragma dynamic 65535
-
-
-public Plugin:myinfo = {
+public Plugin myinfo = {
 	name = "SourceIRC -> Kick",
 	author = "Azelphur",
 	description = "Adds kick command to SourceIRC",
 	version = IRC_VERSION,
 	url = "http://Azelphur.com/project/sourceirc"
-};
+}
 
-public OnPluginStart() {	
+public void OnPluginStart() {
 	LoadTranslations("common.phrases");
 	LoadTranslations("plugin.basecommands");
 }
 
-public OnAllPluginsLoaded() {
-	if (LibraryExists("sourceirc"))
+public void OnAllPluginsLoaded() {
+	if (LibraryExists("sourceirc")) {
 		IRC_Loaded();
+	}
 }
 
-public OnLibraryAdded(const String:name[]) {
-	if (StrEqual(name, "sourceirc"))
+public void OnLibraryAdded(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
 		IRC_Loaded();
+	}
 }
 
-IRC_Loaded() {
-	IRC_CleanUp(); // Call IRC_CleanUp as this function can be called more than once.
+void IRC_Loaded() {
+	// Call IRC_CleanUp as this function can be called more than once.
+	IRC_CleanUp();
 	IRC_RegAdminCmd("kick", Command_Kick, ADMFLAG_KICK, "kick <#userid|name> [reason] - Kicks a player from the server");
 }
 
-public Action:Command_Kick(const String:nick[], args) {
+public Action Command_Kick(const char[] nick, int args) {
 	// Blatently borrowed code from basecommands/kick
-	if (args < 1)
-	{
+	if (args < 1) {
 		IRC_ReplyToCommand(nick, "Usage: kick <#userid|name> [reason]");
 		return Plugin_Handled;
 	}
 
-	decl String:Arguments[256];
-	IRC_GetCmdArgString(Arguments, sizeof(Arguments));
+	char
+		Arguments[256]
+		, arg[65]
+		, target_name[MAX_TARGET_LENGTH];
+	int
+		target_list[MAXPLAYERS]
+		, target_count;
+	bool
+		tn_is_ml;
 
-	decl String:arg[65];
-	new len = BreakString(Arguments, arg, sizeof(arg));
-	
-	if (len == -1)
-	{
+	IRC_GetCmdArgString(Arguments, sizeof(Arguments));
+	int len = BreakString(Arguments, arg, sizeof(arg));
+
+	if (len == -1) {
 		/* Safely null terminate */
 		len = 0;
 		Arguments[0] = '\0';
 	}
-
-	decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
-	
 	if ((target_count = ProcessTargetString(
 			arg,
-			0, 
-			target_list, 
-			MAXPLAYERS, 
+			0,
+			target_list,
+			MAXPLAYERS,
 			COMMAND_FILTER_CONNECTED,
 			target_name,
 			sizeof(target_name),
-			tn_is_ml)) > 0)
-	{
-		decl String:reason[64];
+			tn_is_ml)) > 0) {
+		char reason[64];
 		Format(reason, sizeof(reason), Arguments[len]);
 
-		if (tn_is_ml)
-		{
-			if (reason[0] == '\0')
-			{
+		if (tn_is_ml) {
+			if (reason[0] == '\0') {
 				IRC_ReplyToCommand(nick, "%t", "Kicked target", target_name);
 			}
-			else
-			{
+			else {
 				IRC_ReplyToCommand(nick, "%t", "Kicked target reason", target_name, reason);
 			}
 		}
-		else
-		{
-			if (reason[0] == '\0')
-			{
-				IRC_ReplyToCommand(nick, "Kicked target", "_s", target_name);            
+		else {
+			if (reason[0] == '\0') {
+				IRC_ReplyToCommand(nick, "Kicked target", "_s", target_name);
 			}
-			else
-			{
+			else {
 				IRC_ReplyToCommand(nick, "Kicked target reason", "_s", target_name, reason);
 			}
 		}
-		
-		decl String:hostmask[IRC_MAXLEN];
+
+		char hostmask[IRC_MAXLEN];
 		IRC_GetHostMask(hostmask, sizeof(hostmask));
-		
-		for (new i = 0; i < target_count; i++)
-		{
+
+		for (int i = 0; i < target_count; i++) {
 			PerformKick(hostmask, target_list[i], reason);
 		}
 	}
-	else
-	{
+	else {
 		IRC_ReplyToTargetError(nick, target_count);
 	}
 
 	return Plugin_Handled;
 }
 
-PerformKick(const String:hostmask[], target, const String:reason[])
-{
+void PerformKick(const char[] hostmask, int target, const char[] reason) {
 	LogAction(-1, target, "\"%s\" kicked \"%L\" (reason \"%s\")", hostmask, target, reason);
-
-	if (reason[0] == '\0')
-	{
+	if (reason[0] == '\0') {
 		KickClient(target, "%t", "Kicked by admin");
 	}
-	else
-	{
+	else {
 		KickClient(target, "%s", reason);
 	}
 }
 
-public OnPluginEnd() {
+public void OnPluginEnd() {
 	IRC_CleanUp();
 }
 
