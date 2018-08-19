@@ -14,95 +14,113 @@
     You should have received a copy of the GNU General Public License
     along with SourceIRC.  If not, see <http://www.gnu.org/licenses/>.
 */
+#pragma newdecls required
+#pragma semicolon 1
+#pragma dynamic 65535
 
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
 
-#pragma semicolon 1
-#pragma dynamic 65535
-
-
-public Plugin:myinfo = {
+public Plugin myinfo = {
 	name = "SourceIRC -> Status",
 	author = "Azelphur",
 	description = "Adds status and gameinfo commands show server status and who's online.",
 	version = IRC_VERSION,
 	url = "http://Azelphur.com/project/sourceirc"
-};
-
-public OnAllPluginsLoaded() {
-	if (LibraryExists("sourceirc"))
-		IRC_Loaded();
 }
 
-public OnLibraryAdded(const String:name[]) {
-	if (StrEqual(name, "sourceirc"))
+public void OnAllPluginsLoaded() {
+	if (LibraryExists("sourceirc")) {
 		IRC_Loaded();
+	}
 }
 
-IRC_Loaded() {
-	IRC_CleanUp(); // Call IRC_CleanUp as this function can be called more than once.
+public void OnLibraryAdded(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
+		IRC_Loaded();
+	}
+}
+
+void IRC_Loaded() {
+	// Call IRC_CleanUp as this function can be called more than once.
+	IRC_CleanUp();
 	IRC_RegCmd("status", Command_Status, "status - Shows the server name, map, nextmap, and players who are online.");
 	IRC_RegCmd("gameinfo", Command_GameInfo, "gameinfo - Shows the server name, ip, map, nextmap, how many players are online and timeleft (If supported).");
 }
 
-public Action:Command_GameInfo(const String:nick[], args) {
-	decl String:hostname[256], String:serverdomain[128], String:map[64], String:nextmap[64], String:hostmask[512];
-	IRC_GetHostMask(hostmask, sizeof(hostmask));
+public Action Command_GameInfo(const char[] nick, int args) {
+	char
+		hostname[256]
+		, serverdomain[128]
+		, map[64]
+		, nextmap[64];
+	int
+		timeleft;
 
 	GetClientName(0, hostname, sizeof(hostname));
-	IRC_ReplyToCommand(nick, "hostname: %s", hostname);
-
 	IRC_GetServerDomain(serverdomain, sizeof(serverdomain));
-	IRC_ReplyToCommand(nick, "udp/ip  : %s", serverdomain);
-
 	GetCurrentMap(map, sizeof(map));
-	IRC_ReplyToCommand(nick, "map     : %s", map);
-
 	GetNextMap(nextmap, sizeof(nextmap));
-	IRC_ReplyToCommand(nick, "nextmap : %s", nextmap);
 
+	IRC_ReplyToCommand(nick, "hostname: %s", hostname);
+	IRC_ReplyToCommand(nick, "udp/ip  : %s", serverdomain);
+	IRC_ReplyToCommand(nick, "map     : %s", map);
+	IRC_ReplyToCommand(nick, "nextmap : %s", nextmap);
 	IRC_ReplyToCommand(nick, "players : %d (%d max)", GetClientCount(), GetMaxClients());
-	
-	new timeleft;
-	
+
 	if (GetMapTimeLeft(timeleft)) {
-		if (timeleft >= 0)
+		if (timeleft >= 0) {
 			IRC_ReplyToCommand(nick, "timeleft: %d:%02d", timeleft / 60, timeleft % 60);
-		else
+		}
+		else {
 			IRC_ReplyToCommand(nick, "timeleft: N/A");
+		}
 	}
 	return Plugin_Handled;
 }
 
-public Action:Command_Status(const String:nick[], args) {
-	decl String:hostname[256], String:serverdomain[128], String:map[64], String:hostmask[512], String:auth[64], String:ip[32], String:states[32], time, mins, secs, latency, loss;
+public Action Command_Status(const char[] nick, int args) {
+	char
+		hostname[256]
+		, serverdomain[128]
+		, map[64]
+		, hostmask[512]
+		, auth[64]
+		, ip[32]
+		, states[32];
+	int
+		time
+		, mins
+		, secs
+		, latency
+		, loss;
+
 	IRC_GetHostMask(hostmask, sizeof(hostmask));
-	new bool:isadmin = IRC_GetAdminFlag(hostmask, AdminFlag:ADMFLAG_GENERIC);
-
+	bool isadmin = IRC_GetAdminFlag(hostmask, view_as<AdminFlag>ADMFLAG_GENERIC);
 	GetClientName(0, hostname, sizeof(hostname));
-	IRC_ReplyToCommand(nick, "hostname: %s", hostname);
-
 	IRC_GetServerDomain(serverdomain, sizeof(serverdomain));
-	IRC_ReplyToCommand(nick, "udp/ip  : %s", serverdomain);
-
 	GetCurrentMap(map, sizeof(map));
-	IRC_ReplyToCommand(nick, "map     : %s", map);
 
+	IRC_ReplyToCommand(nick, "hostname: %s", hostname);
+	IRC_ReplyToCommand(nick, "udp/ip  : %s", serverdomain);
+	IRC_ReplyToCommand(nick, "map     : %s", map);
 	IRC_ReplyToCommand(nick, "players : %d (%d max)", GetClientCount(), GetMaxClients());
-	
-	decl String:line[IRC_MAXLEN];
+
+	char line[IRC_MAXLEN];
 	strcopy(line, sizeof(line), "# userid name uniqueid connected ping loss state");
-	if (isadmin)
+	if (isadmin) {
 		StrCat(line, sizeof(line), " adr");
+	}
 	IRC_ReplyToCommand(nick, line);
-	
-	for (new i = 1; i <= GetMaxClients(); i++) {
+
+	for (int i = 1; i <= GetMaxClients(); i++) {
 		if (IsClientConnected(i)) {
-			if (IsClientAuthorized(i))
-				GetClientAuthString(i, auth, sizeof(auth));
-			else
+			if (IsClientAuthorized(i)) {
+				GetClientAuthId(i, AuthId_Steam2, auth, sizeof(auth));
+			}
+			else {
 				strcopy(auth, sizeof(auth), "N/A");
+			}
 
 			if (IsClientInGame(i) && !IsFakeClient(i)) {
 				time = RoundToFloor(GetClientTime(i));
@@ -118,23 +136,28 @@ public Action:Command_Status(const String:nick[], args) {
 				loss = -1;
 			}
 
-			if (IsClientInGame(i))
+			if (IsClientInGame(i)) {
 				strcopy(states, sizeof(states), "active");
-			else
+			}
+			else {
 				strcopy(states, sizeof(states), "spawning");
+			}
+
 			GetClientIP(i, ip, sizeof(ip), false);
-			if (isadmin)
+
+			if (isadmin) {
 				Format(line, sizeof(line), "# %d \"%N\" %s %d:%02d %d %d %s %s", GetClientUserId(i), i, auth, mins, secs, latency, loss, states, ip);
-			else
+			}
+			else {
 				Format(line, sizeof(line), "# %d \"%N\" %s %d:%02d %d %d %s", GetClientUserId(i), i, auth, mins, secs, latency, loss, states);
+			}
 			IRC_ReplyToCommand(nick, line);
 		}
-	}	
-
+	}
 	return Plugin_Handled;
 }
 
-public OnPluginEnd() {
+public void OnPluginEnd() {
 	IRC_CleanUp();
 }
 
