@@ -225,7 +225,11 @@ public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBr
 //	new userid = event.GetInt("userid");
 //	new client = GetClientOfUserId(userid);
 //	if (client != 0) {
-//		char oldname[128], char newname[MAX_NAME_LENGTH], char auth[64], char result[IRC_MAXLEN];
+//		char oldname[128]
+//		, newname[MAX_NAME_LENGTH]
+//		, auth[64]
+//		, result[IRC_MAXLEN];
+//
 //		event.GetString("oldname", oldname, sizeof(oldname));
 //		event.GetString("newname", newname, sizeof(newname));
 //		GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
