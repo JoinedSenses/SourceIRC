@@ -14,48 +14,54 @@
     You should have received a copy of the GNU General Public License
     along with SourceIRC.  If not, see <http://www.gnu.org/licenses/>.
 */
-
+#pragma newdecls required
+#pragma semicolon 1
 #include <socket>
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
-
-#pragma semicolon 1
-
 #define SERVERDATA_EXECCOMMAND 2
 #define SERVERDATA_AUTH 3
 
-new Handle:gsocket = INVALID_HANDLE;
-new REQUESTID = 0;
-new bool:busy = false;
-new String:greplynick[64];
-new String:gcommand[256];
+Handle
+	gsocket;
+int
+	REQUESTID;
+bool
+	busy;
+char
+	greplynick[64]
+	, gcommand[256];
 
-public Plugin:myinfo = {
+public Plugin myinfo = {
 	name = "SourceIRC -> RCON",
 	author = "Azelphur",
 	description = "Allows you to run RCON commands",
 	version = IRC_VERSION,
 	url = "http://Azelphur.com/project/sourceirc"
-};
-
-public OnAllPluginsLoaded() {
-	if (LibraryExists("sourceirc"))
-		IRC_Loaded();
 }
 
-public OnLibraryAdded(const String:name[]) {
-	if (StrEqual(name, "sourceirc"))
+public void OnAllPluginsLoaded() {
+	if (LibraryExists("sourceirc")) {
 		IRC_Loaded();
+	}
 }
 
-IRC_Loaded() {
-	IRC_CleanUp(); // Call IRC_CleanUp as this function can be called more than once.
+public void OnLibraryAdded(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
+		IRC_Loaded();
+	}
+}
+
+void IRC_Loaded() {
+	// Call IRC_CleanUp as this function can be called more than once.
+	IRC_CleanUp();
 	IRC_RegAdminCmd("rcon", Command_RCON, ADMFLAG_RCON, "rcon <command> - Run an rcon command on the server.");
 }
 
-public Action:Command_RCON(const String:nick[], args) {
-	if (busy)
+public Action Command_RCON(const char[] nick, int args) {
+	if (busy) {
 		IRC_ReplyToCommand(nick, "%t", "RCON Busy");
+	}
 	else {
 		IRC_GetCmdArgString(gcommand, sizeof(gcommand));
 		strcopy(greplynick, sizeof(greplynick), nick);
@@ -64,70 +70,78 @@ public Action:Command_RCON(const String:nick[], args) {
 	return Plugin_Handled;
 }
 
-Connect() {
-	decl String:ServerIp[16];
-	new iIp = GetConVarInt(FindConVar("hostip"));
+void Connect() {
+	char ServerIp[16];
+	int iIp = FindConVar("hostip").IntValue;
 	Format(ServerIp, sizeof(ServerIp), "%i.%i.%i.%i", (iIp >> 24) & 0x000000FF,
-                                                          (iIp >> 16) & 0x000000FF,
-                                                          (iIp >>  8) & 0x000000FF,
-                                                          iIp         & 0x000000FF);
-	new ServerPort = GetConVarInt(FindConVar("hostport"));
+                                                      (iIp >> 16) & 0x000000FF,
+                                                      (iIp >>  8) & 0x000000FF,
+                                                      (iIp >>  0) & 0x000000FF);
+	int ServerPort = FindConVar("hostport").IntValue;
 	gsocket = SocketCreate(SOCKET_TCP, OnSocketError);
-	SocketConnect(gsocket, OnSocketConnect, OnSocketReceive, OnSocketDisconnected, ServerIp, ServerPort); 
+	SocketConnect(gsocket, OnSocketConnect, OnSocketReceive, OnSocketDisconnected, ServerIp, ServerPort);
 }
 
-public OnSocketConnect(Handle:socket, any:arg) {
-	decl String:rcon_password[256];
-	GetConVarString(FindConVar("rcon_password"), rcon_password, sizeof(rcon_password));
-	if (StrEqual(rcon_password, ""))
+public void OnSocketConnect(Handle socket, any arg) {
+	char rcon_password[256];
+	FindConVar("rcon_password").GetString(rcon_password, sizeof(rcon_password));
+	if (StrEqual(rcon_password, "")) {
 		SetFailState("You need to enable RCON to use this plugin");
-	ReplaceString(rcon_password, sizeof(rcon_password), "%", "%%"); // Escape out any percent symbols that should happen to be in the password
+	}
+	// Escape out any percent symbols that should happen to be in the password
+	ReplaceString(rcon_password, sizeof(rcon_password), "%", "%%");
 	Send(SERVERDATA_AUTH, rcon_password);
 }
 
-public OnSocketReceive(Handle:socket, String:receiveData[], const dataSize, any:hFile) {
-	new i = 0;
+public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSize, any hFile) {
+	int i = 0;
 	while (i < dataSize) {
-		new packetlen = ReadByte(receiveData[i]);
-		new requestid = ReadByte(receiveData[i+4]);
-		new serverdata = ReadByte(receiveData[i+8]);
+		int
+			packetlen = ReadByte(receiveData[i])
+			, requestid = ReadByte(receiveData[i+4])
+			, serverdata = ReadByte(receiveData[i+8]);
+
 		if (serverdata == 2) {
-			if (requestid == 1)
+			if (requestid == 1) {
 				Send(SERVERDATA_EXECCOMMAND, gcommand);
-			else
+			}
+			else {
 				IRC_ReplyToCommand(greplynick, "Unable to connect to RCON");
+			}
 		}
 		if (serverdata == 0 && requestid > 1) {
-			decl String:lines[64][256];
-			new linecount = ExplodeString(receiveData[i+12], "\n", lines, sizeof(lines), sizeof(lines[]));
-			for (new l = 0; l < linecount; l++) {
+			char lines[64][256];
+			int linecount = ExplodeString(receiveData[i+12], "\n", lines, sizeof(lines), sizeof(lines[]));
+			for (int l; l < linecount; l++) {
 				IRC_ReplyToCommand(greplynick, "%s", lines[l]);
 			}
 			busy = false;
 			SocketDisconnect(gsocket);
 			REQUESTID = 0;
-			CloseHandle(socket);
+			delete socket;
 		}
 		i += packetlen+4;
 	}
 }
 
-public OnSocketDisconnected(Handle:socket, any:hFile) {
+public void OnSocketDisconnected(Handle socket, any hFile) {
 	REQUESTID = 0;
-	CloseHandle(socket);
+	delete socket;
 }
 
-public OnSocketError(Handle:socket, const errorType, const errorNum, any:hFile) {
+public void OnSocketError(Handle socket, const int errorType, const int errorNum, any hFile) {
 	LogError("socket error %d (errno %d)", errorType, errorNum);
-	CloseHandle(socket);
+	delete socket;
 }
 
-ReadByte(String:recieveData[]) {
-	new numbers[4];
-	for (new i = 0; i <= 3; i++) {
+int ReadByte(char[] recieveData) {
+	int
+		numbers[4]
+		, number;
+
+	for (int i; i <= 3; i++) {
 		numbers[i] = recieveData[i];
 	}
-	new number = 0;
 	number += numbers[0];
 	number += numbers[1]<<8;
 	number += numbers[2]<<16;
@@ -135,17 +149,19 @@ ReadByte(String:recieveData[]) {
 	return number;
 }
 
-Send(type, const String:format[], any:...) {
+void Send(int type, const char[] format, any ...) {
 	REQUESTID++;
-	decl String:packet[1024], String:command[1014];
+	char
+		packet[1024]
+		, command[1014];
+
 	VFormat(command, sizeof(command), format, 2);
-	new num = strlen(command)+10;
-	Format(packet, sizeof(packet), "%c%c%c%c%c%c%c%c%c%c%c%c%s\x00\x00", num&0xFF, num>>8&0xFF, num>>16&0xFF, num>>24&0xFF, REQUESTID&0xFF, REQUESTID>>8&0xFF, REQUESTID>>16&0xFF, REQUESTID>>24&0xFF, type&0xFF, type>>8&0xFF, type>>16&0xFF, type>>24&0xFF, command);
+	int num = strlen(command)+10;
+	Format(packet, sizeof(packet), "%c%c%c%c%c%c%c%c%c%c%c%c%s\x00\x00", num&0xFF, num >> 8&0xFF, num >> 16&0xFF, num >> 24&0xFF, REQUESTID&0xFF, REQUESTID >> 8&0xFF, REQUESTID >> 16&0xFF, REQUESTID >> 24&0xFF, type&0xFF, type >> 8&0xFF, type >> 16&0xFF, type >> 24&0xFF, command);
 	SocketSend(gsocket, packet, strlen(command)+14);
-	return;
 }
 
-public OnPluginEnd() {
+public void OnPluginEnd() {
 	IRC_CleanUp();
 }
 
