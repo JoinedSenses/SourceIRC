@@ -15,46 +15,58 @@
     along with SourceIRC.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#pragma newdecls required
+#pragma semicolon 1
+
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
 
-public Plugin:myinfo = {
+KeyValues
+	kv;
+
+public Plugin myinfo = {
 	name = "SourceIRC -> Hostmasks",
 	author = "Azelphur",
 	description = "Provides access based on hostmask",
 	version = IRC_VERSION,
 	url = "http://Azelphur.com/project/sourceirc"
-};
-
-new Handle:kv;
-
-public OnConfigsExecuted() {
-	kv = CreateKeyValues("SourceIRC");
-	decl String:file[512];
-	BuildPath(Path_SM, file, sizeof(file), "configs/sourceirc.cfg");
-	FileToKeyValues(kv, file);
 }
 
-public IRC_RetrieveUserFlagBits(const String:hostmask[], &flagbits) {	
-	if (!KvJumpToKey(kv, "Access")) return;
-	if (!KvJumpToKey(kv, "Hostmasks")) return;
-	if (!KvGotoFirstSubKey(kv, false)) return;
-	decl String:key[64], String:value[64];
-	new AdminFlag:tempflag;
-	do
-	{
-		KvGetSectionName(kv, key, sizeof(key));
+public void OnConfigsExecuted() {
+	kv = new KeyValues("SourceIRC");
+	char file[512];
+	BuildPath(Path_SM, file, sizeof(file), "configs/sourceirc.cfg");
+	kv.ImportFromFile(file);
+}
+
+public void IRC_RetrieveUserFlagBits(const char[] hostmask, int &flagbits) {
+	if (!kv.JumpToKey("Access")) {
+		return;
+	}
+	if (!kv.JumpToKey("Hostmasks")) {
+		return;
+	}
+	if (!kv.GotoFirstSubKey(false)) {
+		return;
+	}
+	char
+		key[64]
+		, value[64];
+	AdminFlag
+		tempflag;
+	do {
+		kv.GetSectionName(key, sizeof(key));
 		if (IsWildCardMatch(hostmask, key)) {
-			KvGetString(kv, NULL_STRING, value, sizeof(value));
-			for (new i = 0; i <= strlen(value); i++) { 
+			kv.GetString(NULL_STRING, value, sizeof(value));
+			for (int i; i <= strlen(value); i++) {
 				if (FindFlagByChar(value[i], tempflag)) {
-					flagbits |= 1<<_:tempflag;
+					flagbits |= 1 << view_as<int>(tempflag);
 				}
 			}
 		}
-	} while (KvGotoNextKey(kv, false));
+	} while (kv.GotoNextKey(false));
 
-	KvRewind(kv);
+	kv.Rewind();
 }
 
 // http://bit.ly/defcon
