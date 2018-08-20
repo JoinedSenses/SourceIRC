@@ -15,53 +15,62 @@
     along with SourceIRC.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#undef REQUIRE_PLUGIN
-#include <sourceirc>
-
+#pragma newdecls required
 #pragma semicolon 1
 #pragma dynamic 65535
 
-public Plugin:myinfo = {
+#undef REQUIRE_PLUGIN
+#include <sourceirc>
+
+public Plugin myinfo = {
 	name = "SourceIRC -> Change Map",
 	author = "Azelphur",
 	description = "Adds a changemap command to SourceIRC",
 	version = IRC_VERSION,
 	url = "http://Azelphur.com/project/sourceirc"
-};
+}
 
-public OnPluginStart() {
+public void OnPluginStart() {
 	LoadTranslations("sourceirc.phrases");
 }
 
-public OnAllPluginsLoaded() {
-	if (LibraryExists("sourceirc"))
+public void OnAllPluginsLoaded() {
+	if (LibraryExists("sourceirc")) {
 		IRC_Loaded();
+	}
 }
 
-public OnLibraryAdded(const String:name[]) {
-	if (StrEqual(name, "sourceirc"))
+public void OnLibraryAdded(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
 		IRC_Loaded();
+	}
 }
 
-IRC_Loaded() {
-	IRC_CleanUp(); // Call IRC_CleanUp as this function can be called more than once.
+void IRC_Loaded() {
+	// Call IRC_CleanUp as this function can be called more than once.
+	IRC_CleanUp();
 	IRC_RegAdminCmd("changemap", Command_ChangeMap, ADMFLAG_CHANGEMAP, "changemap <map> - Changes the current map, you can use a partial map name.");
 }
 
-public Action:Command_ChangeMap(const String:nick[], args) {
-	decl String:text[IRC_MAXLEN];
+public Action Command_ChangeMap(const char[] nick, int args) {
+	char text[IRC_MAXLEN];
 	IRC_GetCmdArgString(text, sizeof(text));
 	if (IsMapValid(text)) {
 		IRC_ReplyToCommand(nick, "%t", "Changing Map", text);
 		ForceChangeLevel(text, "Requested from IRC");
 	}
 	else {
-		decl String:storedmap[64], String:map[64];
-		new Handle:maps = CreateArray(64);
+		char
+			storedmap[64]
+			, map[64];
+		bool
+			foundmatch;
+		ArrayList
+			maps = new ArrayList(64);
+		
 		ReadMapList(maps);
-		new bool:foundmatch = false;
-		for (new i = 0; i < GetArraySize(maps); i++) {
-			GetArrayString(maps, i, storedmap, sizeof(storedmap));
+		for (int i; i < maps.Length; i++) {
+			maps.GetString(i, storedmap, sizeof(storedmap));
 			if (StrContains(storedmap, text, false) != -1) {
 				if (!foundmatch) {
 					strcopy(map, sizeof(map), storedmap);
@@ -85,7 +94,7 @@ public Action:Command_ChangeMap(const String:nick[], args) {
 	return Plugin_Handled;
 }
 
-public OnPluginEnd() {
+public void OnPluginEnd() {
 	IRC_CleanUp();
 }
 
