@@ -94,7 +94,7 @@ public void OnSocketConnect(Handle socket, any arg) {
 }
 
 public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSize, any hFile) {
-	int i = 0;
+	int i;
 	while (i < dataSize) {
 		int
 			packetlen = ReadByte(receiveData[i])

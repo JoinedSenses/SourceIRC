@@ -29,17 +29,18 @@
 #include <sourceirc>
 #include <color_literals>
 
-#define sColor "a0d0db"
-
 bool
 	  g_bShowIRC[MAXPLAYERS+1]
 	, g_bLateLoad;
 ConVar
-	g_cvAllowHide
+	  g_cvAllowHide
 	, g_cvAllowFilter
 	, g_cvHideDisconnect
 	, g_cvarPctRequired
-	, g_cvarMinLength;
+	, g_cvarMinLength
+	, g_cvColor;
+char
+	  g_sColor[8];
 
 public Plugin myinfo = {
 	name = "SourceIRC -> Relay All",
@@ -60,14 +61,42 @@ public void OnPluginStart() {
 	HookEvent("player_chat", Event_PlayerSay, EventHookMode_Post);
 
 	RegConsoleCmd("sm_irc", cmdIRC, "Toggles IRC chat");
+	RegAdminCmd("sm_irccolor", cmdIRCColor, ADMFLAG_ROOT, "Set IRC tag color");
 	g_cvAllowHide = CreateConVar("irc_allow_hide", "0", "Sets whether players can hide IRC chat", FCVAR_NOTIFY);
 	g_cvAllowFilter = CreateConVar("irc_allow_filter", "0", "Sets whether IRC filters messages beginning with !", FCVAR_NOTIFY);
 	g_cvHideDisconnect = CreateConVar("irc_disconnect_filter", "0", "Sets whether IRC filters disconnect messages", FCVAR_NOTIFY);
+	g_cvColor = CreateConVar("irc_color", "65bca6", "Set irc tag color");
 
 	g_cvarPctRequired = CreateConVar("anti_caps_lock_percent", "0.9", "Force all letters to lowercase when this percent of letters is uppercase (not counting symbols)", _, true, 0.0, true, 1.0);
 	g_cvarMinLength = CreateConVar("anti_caps_lock_min_length", "5", "Only force letters to lowercase when a message has at least this many letters (not counting symbols)", _, true, 0.0);
 
+	g_cvColor.AddChangeHook(cvarColorChanged);
+
 	LoadTranslations("sourceirc.phrases");
+	g_cvColor.GetString(g_sColor, sizeof(g_sColor));
+}
+
+public Action cmdIRCColor(int client, int args) {
+	char arg[32];
+	GetCmdArg(1, arg, sizeof(arg));
+
+	if (strlen(arg) != 6) {
+		ReplyToCommand(client, "[IRC] Arg must be 6 hex chars");
+		return Plugin_Handled;
+	}
+	char color[7];
+	Format(color, sizeof(color), arg);
+	g_cvColor.SetString(arg);
+
+	PrintToChat(client, "\x01[\x07%sIRC\x01] Color set to\x07%s %s", arg, arg, arg);
+	return Plugin_Handled;
+}
+
+public void cvarColorChanged(ConVar convar, const char[] oldValue, const char[] newValue) {
+	if (strlen(newValue) != 6) {
+		g_cvColor.SetString(oldValue);
+	}
+	Format(g_sColor, sizeof(g_sColor), newValue);
 }
 
 public void OnAllPluginsLoaded() {
@@ -223,6 +252,9 @@ public Action Event_PRIVMSG(const char[] hostmask, int args) {
 			strcopy(colorValue, sizeof(colorValue), text[1]);
 			int value = StringToInt(colorValue);
 			switch(value) {
+				case 0: {
+					color = "\x07edfcff";
+				}
 				case 1: {
 					color = "\x07000000";
 				}
@@ -241,8 +273,11 @@ public Action Event_PRIVMSG(const char[] hostmask, int args) {
 				case 6: {
 					color = "\x079c009c";
 				}
-				case 7, 8: {
+				case 7: {
 					color = "\x07fc7f00";
+				}
+				case 8: {
+					color = "\x07FFFF00";
 				}
 				case 9: {
 					color = "\x0700d600";
@@ -279,10 +314,12 @@ public Action Event_PRIVMSG(const char[] hostmask, int args) {
 		for (int i = 1; i <= MaxClients; i++) {
 			if (IsClientInGame(i) && !IsFakeClient(i) && g_bShowIRC[i]) {
 				if (explode != 1 && isPlayer) {
-					PrintColoredChat(i, "\x07%s%s\x01| %s%s\x01:%s", sColor, nick, color, message[0], message[1]);
+					PrintColoredChat(i, "\x07%s%s\x01| %s%s\x01:%s", g_sColor, nick, color, message[0], message[1]);
 				}
 				else {
-					PrintColoredChat(i, "[\x07%sIRC\x01] \x07d0e8f4%s\x01 :  %s", sColor, nick, text);
+					ReplaceString(text, sizeof(text), "__", "");
+					ReplaceString(text, sizeof(text), "**", "");
+					PrintColoredChat(i, "[\x07%sIRC\x01] \x07d0e8f4%s\x01 :  %s", g_sColor, nick, text);
 				}
 			}
 		}
