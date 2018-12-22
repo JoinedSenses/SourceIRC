@@ -21,8 +21,7 @@
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
 
-KeyValues
-	kv;
+KeyValues g_kvConfig;
 
 public Plugin myinfo = {
 	name = "SourceIRC -> Hostmasks",
@@ -33,40 +32,38 @@ public Plugin myinfo = {
 }
 
 public void OnConfigsExecuted() {
-	kv = new KeyValues("SourceIRC");
+	g_kvConfig = new KeyValues("SourceIRC");
 	char file[512];
 	BuildPath(Path_SM, file, sizeof(file), "configs/sourceirc.cfg");
-	kv.ImportFromFile(file);
+	g_kvConfig.ImportFromFile(file);
 }
 
 public void IRC_RetrieveUserFlagBits(const char[] hostmask, int &flagbits) {
-	if (!kv.JumpToKey("Access")) {
+	if (!g_kvConfig.JumpToKey("Access")) {
 		return;
 	}
-	if (!kv.JumpToKey("Hostmasks")) {
+	if (!g_kvConfig.JumpToKey("Hostmasks")) {
 		return;
 	}
-	if (!kv.GotoFirstSubKey(false)) {
+	if (!g_kvConfig.GotoFirstSubKey(false)) {
 		return;
 	}
-	char
-		key[64]
-		, value[64];
-	AdminFlag
-		tempflag;
+	char key[64];
+	char value[64];
+	AdminFlag tempflag;
 	do {
-		kv.GetSectionName(key, sizeof(key));
+		g_kvConfig.GetSectionName(key, sizeof(key));
 		if (IsWildCardMatch(hostmask, key)) {
-			kv.GetString(NULL_STRING, value, sizeof(value));
+			g_kvConfig.GetString(NULL_STRING, value, sizeof(value));
 			for (int i; i <= strlen(value); i++) {
 				if (FindFlagByChar(value[i], tempflag)) {
 					flagbits |= 1 << view_as<int>(tempflag);
 				}
 			}
 		}
-	} while (kv.GotoNextKey(false));
+	} while (g_kvConfig.GotoNextKey(false));
 
-	kv.Rewind();
+	g_kvConfig.Rewind();
 }
 
 // http://bit.ly/defcon

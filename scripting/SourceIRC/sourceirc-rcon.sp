@@ -22,15 +22,11 @@
 #define SERVERDATA_EXECCOMMAND 2
 #define SERVERDATA_AUTH 3
 
-Handle
-	gsocket;
-int
-	REQUESTID;
-bool
-	busy;
-char
-	greplynick[64]
-	, gcommand[256];
+Handle g_hSocket;
+int g_iRequestId;
+bool g_bBusy;
+char g_sReplyNick[64];
+char g_sCommand[256];
 
 public Plugin myinfo = {
 	name = "SourceIRC -> RCON",
@@ -59,12 +55,12 @@ void IRC_Loaded() {
 }
 
 public Action Command_RCON(const char[] nick, int args) {
-	if (busy) {
+	if (g_bBusy) {
 		IRC_ReplyToCommand(nick, "%t", "RCON Busy");
 	}
 	else {
-		IRC_GetCmdArgString(gcommand, sizeof(gcommand));
-		strcopy(greplynick, sizeof(greplynick), nick);
+		IRC_GetCmdArgString(g_sCommand, sizeof(g_sCommand));
+		strcopy(g_sReplyNick, sizeof(g_sReplyNick), nick);
 		Connect();
 	}
 	return Plugin_Handled;
@@ -78,8 +74,8 @@ void Connect() {
                                                       (iIp >>  8) & 0x000000FF,
                                                       (iIp >>  0) & 0x000000FF);
 	int ServerPort = FindConVar("hostport").IntValue;
-	gsocket = SocketCreate(SOCKET_TCP, OnSocketError);
-	SocketConnect(gsocket, OnSocketConnect, OnSocketReceive, OnSocketDisconnected, ServerIp, ServerPort);
+	g_hSocket = SocketCreate(SOCKET_TCP, OnSocketError);
+	SocketConnect(g_hSocket, OnSocketConnect, OnSocketReceive, OnSocketDisconnected, ServerIp, ServerPort);
 }
 
 public void OnSocketConnect(Handle socket, any arg) {
@@ -96,28 +92,27 @@ public void OnSocketConnect(Handle socket, any arg) {
 public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSize, any hFile) {
 	int i;
 	while (i < dataSize) {
-		int
-			packetlen = ReadByte(receiveData[i])
-			, requestid = ReadByte(receiveData[i+4])
-			, serverdata = ReadByte(receiveData[i+8]);
+		int packetlen = ReadByte(receiveData[i]);
+		int requestid = ReadByte(receiveData[i+4]);
+		int serverdata = ReadByte(receiveData[i+8]);
 
 		if (serverdata == 2) {
 			if (requestid == 1) {
-				Send(SERVERDATA_EXECCOMMAND, gcommand);
+				Send(SERVERDATA_EXECCOMMAND, g_sCommand);
 			}
 			else {
-				IRC_ReplyToCommand(greplynick, "Unable to connect to RCON");
+				IRC_ReplyToCommand(g_sReplyNick, "Unable to connect to RCON");
 			}
 		}
 		if (serverdata == 0 && requestid > 1) {
 			char lines[64][256];
 			int linecount = ExplodeString(receiveData[i+12], "\n", lines, sizeof(lines), sizeof(lines[]));
 			for (int l; l < linecount; l++) {
-				IRC_ReplyToCommand(greplynick, "%s", lines[l]);
+				IRC_ReplyToCommand(g_sReplyNick, "%s", lines[l]);
 			}
-			busy = false;
-			SocketDisconnect(gsocket);
-			REQUESTID = 0;
+			g_bBusy = false;
+			SocketDisconnect(g_hSocket);
+			g_iRequestId = 0;
 			delete socket;
 		}
 		i += packetlen+4;
@@ -125,7 +120,7 @@ public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSiz
 }
 
 public void OnSocketDisconnected(Handle socket, any hFile) {
-	REQUESTID = 0;
+	g_iRequestId = 0;
 	delete socket;
 }
 
@@ -135,9 +130,8 @@ public void OnSocketError(Handle socket, const int errorType, const int errorNum
 }
 
 int ReadByte(char[] recieveData) {
-	int
-		numbers[4]
-		, number;
+	int numbers[4];
+	int number;
 
 	for (int i; i <= 3; i++) {
 		numbers[i] = recieveData[i];
@@ -150,15 +144,14 @@ int ReadByte(char[] recieveData) {
 }
 
 void Send(int type, const char[] format, any ...) {
-	REQUESTID++;
-	char
-		packet[1024]
-		, command[1014];
+	g_iRequestId++;
+	char packet[1024];
+	char command[1014];
 
 	VFormat(command, sizeof(command), format, 2);
 	int num = strlen(command)+10;
-	Format(packet, sizeof(packet), "%c%c%c%c%c%c%c%c%c%c%c%c%s\x00\x00", num&0xFF, num >> 8&0xFF, num >> 16&0xFF, num >> 24&0xFF, REQUESTID&0xFF, REQUESTID >> 8&0xFF, REQUESTID >> 16&0xFF, REQUESTID >> 24&0xFF, type&0xFF, type >> 8&0xFF, type >> 16&0xFF, type >> 24&0xFF, command);
-	SocketSend(gsocket, packet, strlen(command)+14);
+	Format(packet, sizeof(packet), "%c%c%c%c%c%c%c%c%c%c%c%c%s\x00\x00", num&0xFF, num >> 8&0xFF, num >> 16&0xFF, num >> 24&0xFF, g_iRequestId&0xFF, g_iRequestId >> 8&0xFF, g_iRequestId >> 16&0xFF, g_iRequestId >> 24&0xFF, type&0xFF, type >> 8&0xFF, type >> 16&0xFF, type >> 24&0xFF, command);
+	SocketSend(g_hSocket, packet, strlen(command)+14);
 }
 
 public void OnPluginEnd() {

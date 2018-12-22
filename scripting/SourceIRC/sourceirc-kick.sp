@@ -58,15 +58,12 @@ public Action Command_Kick(const char[] nick, int args) {
 		return Plugin_Handled;
 	}
 
-	char
-		Arguments[256]
-		, arg[65]
-		, target_name[MAX_TARGET_LENGTH];
-	int
-		target_list[MAXPLAYERS]
-		, target_count;
-	bool
-		tn_is_ml;
+	char Arguments[256];
+	char arg[65];
+	char target_name[MAX_TARGET_LENGTH];
+	int target_list[MAXPLAYERS];
+	int target_count;
+	bool tn_is_ml;
 
 	IRC_GetCmdArgString(Arguments, sizeof(Arguments));
 	int len = BreakString(Arguments, arg, sizeof(arg));

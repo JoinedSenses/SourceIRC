@@ -49,17 +49,16 @@ void IRC_Loaded() {
 }
 
 public Action Command_GameInfo(const char[] nick, int args) {
-	char
-		hostname[256]
-		, serverdomain[128]
-		, map[64]
-		, nextmap[64];
-	int
-		timeleft;
-
+	char hostname[256];
 	GetClientName(0, hostname, sizeof(hostname));
+
+	char serverdomain[128];
 	IRC_GetServerDomain(serverdomain, sizeof(serverdomain));
+
+	char map[64];
 	GetCurrentMap(map, sizeof(map));
+
+	char nextmap[64];
 	GetNextMap(nextmap, sizeof(nextmap));
 
 	IRC_ReplyToCommand(nick, "hostname: %s", hostname);
@@ -68,6 +67,7 @@ public Action Command_GameInfo(const char[] nick, int args) {
 	IRC_ReplyToCommand(nick, "nextmap : %s", nextmap);
 	IRC_ReplyToCommand(nick, "players : %d (%d max)", GetClientCount(), GetMaxClients());
 
+	int timeleft;
 	if (GetMapTimeLeft(timeleft)) {
 		if (timeleft >= 0) {
 			IRC_ReplyToCommand(nick, "timeleft: %d:%02d", timeleft / 60, timeleft % 60);
@@ -80,25 +80,16 @@ public Action Command_GameInfo(const char[] nick, int args) {
 }
 
 public Action Command_Status(const char[] nick, int args) {
-	char
-		hostname[256]
-		, serverdomain[128]
-		, map[64]
-		, hostmask[512]
-		, auth[64]
-		, ip[32]
-		, states[32];
-	int
-		time
-		, mins
-		, secs
-		, latency
-		, loss;
-
+	char hostmask[512];
 	IRC_GetHostMask(hostmask, sizeof(hostmask));
-	bool isadmin = IRC_GetAdminFlag(hostmask, view_as<AdminFlag>ADMFLAG_GENERIC);
+
+	char hostname[256];
 	GetClientName(0, hostname, sizeof(hostname));
+
+	char serverdomain[128];
 	IRC_GetServerDomain(serverdomain, sizeof(serverdomain));
+
+	char map[64];
 	GetCurrentMap(map, sizeof(map));
 
 	IRC_ReplyToCommand(nick, "hostname: %s", hostname);
@@ -108,11 +99,21 @@ public Action Command_Status(const char[] nick, int args) {
 
 	char line[IRC_MAXLEN];
 	strcopy(line, sizeof(line), "# userid name uniqueid connected ping loss state");
+
+	bool isadmin = IRC_GetAdminFlag(hostmask, view_as<AdminFlag>ADMFLAG_GENERIC);
 	if (isadmin) {
 		StrCat(line, sizeof(line), " adr");
 	}
 	IRC_ReplyToCommand(nick, line);
 
+	char auth[64];
+	char ip[32];
+	char states[32];
+	int time;
+	int mins;
+	int secs;
+	int latency;
+	int loss;
 	for (int i = 1; i <= GetMaxClients(); i++) {
 		if (IsClientConnected(i)) {
 			if (IsClientAuthorized(i)) {

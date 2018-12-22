@@ -337,7 +337,7 @@ public Action cmdIRC(int client, int iArgC) {
 		PrintColoredChat(client, "[\x03IRC\x01] %s listening to IRC chat", g_bShowIRC[client] ? "Now" : "Stopped");
     }
 	else {
-		PrintColoredChat(client, "\x01[\x03IRC\x01] IRC Hide not allowed for this server");
+		PrintColoredChat(client, "[\x03IRC\x01] IRC Hide not allowed for this server");
 	}
 	return Plugin_Handled;
 }

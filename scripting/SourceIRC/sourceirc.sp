@@ -22,45 +22,44 @@
 
 Handle
 	// Global socket handle for the IRC connection
-	gsocket;
+	  g_hSocket
+	// Queue for rate limiting	
+	, g_hMessageTimer;
 KeyValues
 	// Global keyvalues handle for the config file
-	  kv;
+	  g_kvConfig;
 ArrayList
 	// Command registry for plugins using IRC_Reg*Cmd
-	  CommandPlugins
-	, Commands
-	, CommandCallbacks
-	, CommandDescriptions
-	, CommandFlags
-	, CommandPermissions
+	  g_aCommandPlugins
+	, g_aCommands
+	, g_aCommandCallbacks
+	, g_aCommandDescriptions
+	, g_aCommandFlags
+	, g_aCommandPermissions
 	// Event registry for plugins using IRC_HookEvent
-	, EventPlugins
-	, Events
-	, EventCallbacks
+	, g_aEventPlugins
+	, g_aEvents
+	, g_aEventCallbacks
 	// Queue for rate limiting
-	, messagequeue
+	, g_aMessageQueue
 	// Temporary storage for command and event arguments
-	, cmdargs;
-Handle
-	// Queue for rate limiting	
-	  messagetimer;
+	, g_aCmdArgs;
 float
-	  messagerate;
+	  g_fMessageRate;
 char
 	// Temporary storage for command and event arguments
-	  cmdargstring[IRC_MAXLEN]
-	, cmdhostmask[IRC_MAXLEN]
+	  g_sCmdArgString[IRC_MAXLEN]
+	, g_sCmdHostMask[IRC_MAXLEN]
 	// My nickname
-	, g_nick[IRC_NICK_MAXLEN]
+	, g_sNick[IRC_NICK_MAXLEN]
 	// IRC can break messages into more than one packet, so this is temporary storage for "Broken" packets
-	, brokenline[IRC_MAXLEN];
+	, g_sBrokenLine[IRC_MAXLEN];
 bool
 	// Are we connected yet?
-	  g_connected;
+	  g_bConnected;
 int
 	// Debug mode.
-	  g_debug;
+	  g_iDebug;
 
 public Plugin myinfo = {
 	name = "SourceIRC",
@@ -71,68 +70,64 @@ public Plugin myinfo = {
 };
 
 public void OnPluginStart() {
-	RegPluginLibrary("sourceirc");
-
 	CreateConVar("sourceirc_version", IRC_VERSION, "Current version of SourceIRC", FCVAR_REPLICATED|FCVAR_SPONLY|FCVAR_NOTIFY);
 	LoadTranslations("sourceirc.phrases");
 
-	CommandPlugins = new ArrayList();
-	Commands = new ArrayList(IRC_CMD_MAXLEN);
-	CommandCallbacks = new ArrayList();
-	CommandDescriptions = new ArrayList(256);
-	CommandFlags = new ArrayList();
-	CommandPermissions = new ArrayList();
+	g_aCommandPlugins = new ArrayList();
+	g_aCommands = new ArrayList(IRC_CMD_MAXLEN);
+	g_aCommandCallbacks = new ArrayList();
+	g_aCommandDescriptions = new ArrayList(256);
+	g_aCommandFlags = new ArrayList();
+	g_aCommandPermissions = new ArrayList();
 
-	EventPlugins = new ArrayList();
-	Events = new ArrayList(IRC_MAXLEN);
-	EventCallbacks = new ArrayList();
+	g_aEventPlugins = new ArrayList();
+	g_aEvents = new ArrayList(IRC_MAXLEN);
+	g_aEventCallbacks = new ArrayList();
 
-	messagequeue = new ArrayList(IRC_MAXLEN);
+	g_aMessageQueue = new ArrayList(IRC_MAXLEN);
 
-	cmdargs = new ArrayList(IRC_MAXLEN);
+	g_aCmdArgs = new ArrayList(IRC_MAXLEN);
 
-	g_connected = false;
+	g_bConnected = false;
 	RegAdminCmd("irc_send", Command_Send, ADMFLAG_RCON, "irc_send <message>");
 }
 
 public void OnAllPluginsLoaded() {
-	IRC_RegCmd("help", Command_Help, "help - Shows a list of commands available to you");
+	IRC_RegCmd("help", Command_Help, "help - Shows a list of g_aCommands available to you");
 	IRC_HookEvent("433", Event_RAW433);
 	IRC_HookEvent("NICK", Event_NICK);
 }
 
 public Action Event_RAW433(const char[] hostmask, int args) {
-	if (!g_connected) {
+	if (!g_bConnected) {
 		char nick[IRC_NICK_MAXLEN];
 		IRC_GetNick(nick, sizeof(nick));
 		LogError("Nickname %s is already in use, trying %s_", nick, nick);
 		StrCat(nick, sizeof(nick), "_");
 		IRC_Send("NICK %s", nick);
-		strcopy(g_nick, sizeof(g_nick), nick);
+		strcopy(g_sNick, sizeof(g_sNick), nick);
 	}
 }
 
 public Action Event_NICK(const char[] hostmask, int args) {
-	char
-		newnick[64]
-		, oldnick[IRC_NICK_MAXLEN];
+	char newnick[64];
+	char oldnick[IRC_NICK_MAXLEN];
 
 	IRC_GetNickFromHostMask(hostmask, oldnick, sizeof(oldnick));
-	if (StrEqual(oldnick, g_nick)) {
+	if (StrEqual(oldnick, g_sNick)) {
 		IRC_GetEventArg(1, newnick, sizeof(newnick));
-		strcopy(g_nick, sizeof(g_nick), newnick);
+		strcopy(g_sNick, sizeof(g_sNick), newnick);
 	}
 }
 
 public Action Command_Help(const char[] nick, int args) {
-	char
-		description[256]
-		, hostmask[IRC_MAXLEN];
+	char description[256];
+	char hostmask[IRC_MAXLEN];
 
 	IRC_GetHostMask(hostmask, sizeof(hostmask));
-	for (int i = 0; i < Commands.Length; i++) {
-		if (IRC_GetAdminFlag(hostmask, CommandPermissions.Get(i))) {
-			CommandDescriptions.GetString(i, description, sizeof(description));
+	for (int i = 0; i < g_aCommands.Length; i++) {
+		if (IRC_GetAdminFlag(hostmask, g_aCommandPermissions.Get(i))) {
+			g_aCommandDescriptions.GetString(i, description, sizeof(description));
 			IRC_ReplyToCommand(nick, "%s", description);
 		}
 	}
@@ -140,7 +135,7 @@ public Action Command_Help(const char[] nick, int args) {
 }
 
 public Action Command_Send(int client, int args) {
-	if (g_connected) {
+	if (g_bConnected) {
 		char buffer[IRC_MAXLEN];
 		GetCmdArgString(buffer, sizeof(buffer));
 		IRC_Send(buffer);
@@ -151,34 +146,34 @@ public Action Command_Send(int client, int args) {
 }
 
 public void OnConfigsExecuted() {
-	if (gsocket == null) {
+	if (g_hSocket == null) {
 		LoadConfigs();
 		Connect();
 	}
 }
 
 void LoadConfigs() {
-	kv = new KeyValues("SourceIRC");
+	g_kvConfig = new KeyValues("SourceIRC");
 	char file[512];
 	BuildPath(Path_SM, file, sizeof(file), "configs/sourceirc.cfg");
-	kv.ImportFromFile(file);
-	kv.JumpToKey("Settings");
-	messagerate = kv.GetFloat("msg-rate", 2.0);
-	g_debug = kv.GetNum("debug", 0);
-	kv.Rewind();
+	g_kvConfig.ImportFromFile(file);
+	g_kvConfig.JumpToKey("Settings");
+	g_fMessageRate = g_kvConfig.GetFloat("msg-rate", 2.0);
+	g_iDebug = g_kvConfig.GetNum("debug", 0);
+	g_kvConfig.Rewind();
 }
 
 void Connect() {
 	char server[256];
-	kv.JumpToKey("Server");
-	kv.GetString("server", server, sizeof(server), "");
-	if (StrEqual(server, "")) {
+	g_kvConfig.JumpToKey("Server");
+	g_kvConfig.GetString("server", server, sizeof(server), "");
+	if (server[0] == '\0') {
 		SetFailState("No server defined in sourceirc.cfg");
 	}
-	int port = kv.GetNum("port", 6667);
-	kv.Rewind();
-	gsocket = SocketCreate(SOCKET_TCP, OnSocketError);
-	SocketConnect(gsocket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, server, port);
+	int port = g_kvConfig.GetNum("port", 6667);
+	g_kvConfig.Rewind();
+	g_hSocket = SocketCreate(SOCKET_TCP, OnSocketError);
+	SocketConnect(g_hSocket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, server, port);
 }
 
 public void OnSocketConnected(Handle socket, any arg) {
@@ -187,11 +182,11 @@ public void OnSocketConnected(Handle socket, any arg) {
 	char ServerIp[16];
 	char password[IRC_CHANNEL_MAXLEN];
 
-	kv.JumpToKey("Server");
-	kv.GetString("nickname", g_nick, sizeof(g_nick), "SourceIRC");
-	kv.GetString("realname", realname, sizeof(realname), "SourceIRC - http://Azelphur.com/project/sourceirc");
-	kv.GetString("password", password, sizeof(password), "");
-	kv.Rewind();
+	g_kvConfig.JumpToKey("Server");
+	g_kvConfig.GetString("nickname", g_sNick, sizeof(g_sNick), "SourceIRC");
+	g_kvConfig.GetString("realname", realname, sizeof(realname), "SourceIRC - http://Azelphur.com/project/sourceirc");
+	g_kvConfig.GetString("password", password, sizeof(password), "");
+	g_kvConfig.Rewind();
 	SocketGetHostName(hostname, sizeof(hostname));
 
 	int iIp = FindConVar("hostip").IntValue;
@@ -201,11 +196,11 @@ public void OnSocketConnected(Handle socket, any arg) {
                                                       (iIp >>  0) & 0x000000FF
     );
 
-	if (!StrEqual(password, "")) {
+	if (password[0] != '\0') {
 		IRC_Send("PASS %s", password);
 	}
-	IRC_Send("NICK %s", g_nick);
-	IRC_Send("USER %s %s %s :%s", g_nick, hostname, ServerIp, realname);
+	IRC_Send("NICK %s", g_sNick);
+	IRC_Send("USER %s %s %s :%s", g_sNick, hostname, ServerIp, realname);
 }
 
 public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSize, any hFile) {
@@ -223,22 +218,22 @@ public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSiz
 		startpos += SplitString(receiveData[startpos], "\n", line, sizeof(line));
 		// is this the first part of a "Broken" packet?
 		if (receiveData[startpos-1] != '\n') {
-			strcopy(brokenline, sizeof(brokenline), line);
+			strcopy(g_sBrokenLine, sizeof(g_sBrokenLine), line);
 			break;
 		}
 		// Is this the latter half of a "Broken" packet? Stick it back together again.
-		if (!StrEqual(brokenline, "")) {
+		if (g_sBrokenLine[0] != '\0') {
 			char originalline[IRC_MAXLEN];
 			strcopy(originalline, sizeof(originalline), line);
-			strcopy(line, sizeof(line), brokenline);
+			strcopy(line, sizeof(line), g_sBrokenLine);
 			StrCat(line, sizeof(line), originalline);
-			brokenline[0] = '\x00';
+			g_sBrokenLine[0] = '\x00';
 		}
 		if (line[strlen(line)-1] == '\r') {
 			line[strlen(line)-1] = '\x00';
 		}
 		prefix[0] = '\x00';
-		if (g_debug) {
+		if (g_iDebug) {
 			LogMessage("RECV %s", line);
 		}
 		if (line[0] == ':') {
@@ -323,25 +318,25 @@ void HandleLine(char[] prefix, ArrayList args) {
 		IRC_Send("PONG %s", reply);
 	}
 	// Recieved RAW 004 or RAW 376? We're connected. Yay!
-	else if (!g_connected & (StrEqual(command, "004") || StrEqual(command, "376"))) {
-		g_connected = true;
+	else if (!g_bConnected & (StrEqual(command, "004") || StrEqual(command, "376"))) {
+		g_bConnected = true;
 		ServerCommand("exec sourcemod/irc-connected.cfg");
 		Handle connected = CreateGlobalForward("IRC_Connected", ET_Ignore);
 		Call_StartForward(connected);
 		Call_Finish();
 		delete connected;
 	}
-	// Push events to plugins that have hooked them.
-	for (int i = 0; i < Events.Length; i++) {
-		Events.GetString(i, ev, sizeof(ev));
+	// Push g_aEvents to plugins that have hooked them.
+	for (int i = 0; i < g_aEvents.Length; i++) {
+		g_aEvents.GetString(i, ev, sizeof(ev));
 		if (StrEqual(command, ev, false)) {
 			Action result;
-			cmdargs = args;
+			g_aCmdArgs = args;
 			Handle f = CreateForward(ET_Event, Param_String, Param_Cell);
-			AddToForward(f, EventPlugins.Get(i), EventCallbacks.Get(i));
+			AddToForward(f, g_aEventPlugins.Get(i), g_aEventCallbacks.Get(i));
 			Call_StartForward(f);
 			Call_PushString(prefix);
-			Call_PushCell(cmdargs.Length-1);
+			Call_PushCell(g_aCmdArgs.Length-1);
 			Call_Finish(view_as<int>(result));
 			delete f;
 			if (result == Plugin_Stop) {
@@ -349,20 +344,20 @@ void HandleLine(char[] prefix, ArrayList args) {
 			}
 		}
 	}
-	cmdargs.Clear();
+	g_aCmdArgs.Clear();
 }
 
 int IsTrigger(const char[] channel, const char[] message) {
 	char arg1[IRC_MAXLEN];
 	char cmd_prefix[64];
 
-	if (!kv.JumpToKey("Server") || !kv.JumpToKey("channels") || !kv.JumpToKey(channel)) {
+	if (!g_kvConfig.JumpToKey("Server") || !g_kvConfig.JumpToKey("channels") || !g_kvConfig.JumpToKey(channel)) {
 		cmd_prefix[0] = '\x00';
 	}
 	else {
-		kv.GetString("cmd_prefix", cmd_prefix, sizeof(cmd_prefix), "");
+		g_kvConfig.GetString("cmd_prefix", cmd_prefix, sizeof(cmd_prefix), "");
 	}
-	kv.Rewind();
+	g_kvConfig.Rewind();
 	for (int i = 0; i <= strlen(message); i++) {
 		if (message[i] == ' ') {
 			arg1[i] = '\x00';
@@ -371,10 +366,10 @@ int IsTrigger(const char[] channel, const char[] message) {
 		arg1[i] = message[i];
 	}
 	int startpos = -1;
-	if (StrEqual(channel, g_nick, false)) {
+	if (StrEqual(channel, g_sNick, false)) {
 		startpos = 0;
 	}
-	if (!strncmp(arg1, g_nick, strlen(g_nick), false) && !(strlen(arg1)-strlen(g_nick) > 1)) {
+	if (!strncmp(arg1, g_sNick, strlen(g_sNick), false) && !(strlen(arg1)-strlen(g_sNick) > 1)) {
 		startpos = strlen(arg1);
 	}
 	else if (!StrEqual(cmd_prefix, "") && !strncmp(arg1, cmd_prefix, strlen(cmd_prefix))) {
@@ -382,9 +377,9 @@ int IsTrigger(const char[] channel, const char[] message) {
 	}
 	else {
 		char cmd[IRC_CMD_MAXLEN];
-		for (int i = 0; i < CommandFlags.Length; i++) {
-			if (CommandFlags.Get(i) == IRC_CMDFLAG_NOPREFIX) {
-				Commands.GetString(i, cmd, sizeof(cmd));
+		for (int i = 0; i < g_aCommandFlags.Length; i++) {
+			if (g_aCommandFlags.Get(i) == IRC_CMDFLAG_NOPREFIX) {
+				g_aCommands.GetString(i, cmd, sizeof(cmd));
 				if (!strncmp(arg1, cmd, strlen(cmd), false)) {
 					startpos = 0;
 					break;
@@ -413,30 +408,30 @@ void RunCommand(const char[] hostmask, const char[] message) {
 	if (pos == -1) {
 		pos = 0;
 	}
-	strcopy(cmdargstring, sizeof(cmdargstring), message[pos]);
-	strcopy(cmdhostmask, sizeof(cmdhostmask), hostmask);
+	strcopy(g_sCmdArgString, sizeof(g_sCmdArgString), message[pos]);
+	strcopy(g_sCmdHostMask, sizeof(g_sCmdHostMask), hostmask);
 	while (pos != -1) {
 		pos = BreakString(message[newpos], arg, sizeof(arg));
 		newpos += pos;
-		cmdargs.PushString(arg);
+		g_aCmdArgs.PushString(arg);
 	}
 	char nick[IRC_NICK_MAXLEN];
 	IRC_GetNickFromHostMask(hostmask, nick, sizeof(nick));
-	int arraysize = Commands.Length;
+	int arraysize = g_aCommands.Length;
 	bool IsPlugin_Handled;
 	for (int i = 0; i < arraysize; i++) {
-		Commands.GetString(i, savedcommand, sizeof(savedcommand));
+		g_aCommands.GetString(i, savedcommand, sizeof(savedcommand));
 		if (StrEqual(command, savedcommand, false)) {
-			if (IRC_GetAdminFlag(hostmask, CommandPermissions.Get(i))) {
+			if (IRC_GetAdminFlag(hostmask, g_aCommandPermissions.Get(i))) {
 				Action result;
 				Handle f = CreateForward(ET_Event, Param_String, Param_Cell);
-				AddToForward(f, CommandPlugins.Get(i), CommandCallbacks.Get(i));
+				AddToForward(f, g_aCommandPlugins.Get(i), g_aCommandCallbacks.Get(i));
 				Call_StartForward(f);
 				Call_PushString(nick);
-				Call_PushCell(cmdargs.Length-1);
+				Call_PushCell(g_aCmdArgs.Length-1);
 				Call_Finish(view_as<int>(result));
 				delete f;
-				cmdargs.Clear();
+				g_aCmdArgs.Clear();
 				if (result == Plugin_Handled) {
 					IsPlugin_Handled = true;
 				}
@@ -456,31 +451,30 @@ void RunCommand(const char[] hostmask, const char[] message) {
 }
 
 public void IRC_Connected() {
-	if (!kv.JumpToKey("Server") || !kv.JumpToKey("channels") || !kv.GotoFirstSubKey()) {
+	if (!g_kvConfig.JumpToKey("Server") || !g_kvConfig.JumpToKey("channels") || !g_kvConfig.GotoFirstSubKey()) {
 		LogError("No channels defined in sourceirc.cfg");
 	}
 	else {
-		char
-			channel[IRC_CHANNEL_MAXLEN]
-			, password[IRC_CHANNEL_MAXLEN];
+		char channel[IRC_CHANNEL_MAXLEN];
+		char password[IRC_CHANNEL_MAXLEN];
 
 		do {
-			kv.GetSectionName(channel, sizeof(channel));
-			kv.GetString("password", password, sizeof(password), "");
-			if (StrEqual(password, "")) {
+			g_kvConfig.GetSectionName(channel, sizeof(channel));
+			g_kvConfig.GetString("password", password, sizeof(password), "");
+			if (password[0] == '\0') {
 				IRC_Send("JOIN %s", channel);
 			}
 			else {
 				IRC_Send("JOIN %s %s", channel, password);
 			}
 		}
-		while (kv.GotoNextKey());
+		while (g_kvConfig.GotoNextKey());
 	}
-	kv.Rewind();
+	g_kvConfig.Rewind();
 }
 
 public void OnSocketDisconnected(Handle socket, any hFile) {
-	g_connected = false;
+	g_bConnected = false;
 	CreateTimer(5.0, ReConnect);
 	delete socket;
 }
@@ -490,13 +484,14 @@ public Action ReConnect(Handle timer) {
 }
 
 public void OnSocketError(Handle socket, const int errorType, const int errorNum, any hFile) {
-	g_connected = false;
+	g_bConnected = false;
 	CreateTimer(5.0, ReConnect);
 	LogError("socket error %d (errno %d)", errorType, errorNum);
 	delete socket;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max) {
+	RegPluginLibrary("sourceirc");
 	// Create all the magical natives
 	CreateNative("IRC_RegCmd", N_IRC_RegCmd);
 	CreateNative("IRC_RegAdminCmd", N_IRC_RegAdminCmd);
@@ -523,55 +518,54 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 }
 
 public int N_IRC_GetServerDomain(Handle plugin, int numParams) {
-	char
-		AutoIP[32]
-		, ServerDomain[128];
+	char AutoIP[32];
+	char ServerDomain[128];
 
 	int iIp = FindConVar("hostip").IntValue;
 	Format(AutoIP, sizeof(AutoIP), "%i.%i.%i.%i:%d", (iIp >> 24) & 0x000000FF,
-														  (iIp >> 16) & 0x000000FF,
-														  (iIp >>  8) & 0x000000FF,
-														  iIp         & 0x000000FF,
-														  FindConVar("hostport").IntValue);
-	if (!kv.JumpToKey("Settings")) {
+													 (iIp >> 16) & 0x000000FF,
+													 (iIp >>  8) & 0x000000FF,
+													 (iIp      ) & 0x000000FF,
+													  FindConVar("hostport").IntValue);
+	if (!g_kvConfig.JumpToKey("Settings")) {
 		SetNativeString(1, AutoIP, GetNativeCell(2));
 		return;
 	}
-	kv.GetString("server-domain", ServerDomain, sizeof(ServerDomain), "");
+	g_kvConfig.GetString("server-domain", ServerDomain, sizeof(ServerDomain), "");
 	if (StrEqual(ServerDomain, "")) {
 		SetNativeString(1, AutoIP, GetNativeCell(2));
 		return;
 	}
 
 	SetNativeString(1, ServerDomain, GetNativeCell(2));
-	kv.Rewind();
+	g_kvConfig.Rewind();
 }
 
 public int N_IRC_GetTeamColor(Handle plugin, int numParams) {
 	int team = GetNativeCell(1);
-	if (!kv.JumpToKey("Settings")) {
+	if (!g_kvConfig.JumpToKey("Settings")) {
 		return -1;
 	}
 	char key[16];
 	Format(key, sizeof(key), "teamcolor-%d", team);
-	int color = kv.GetNum(key, -1);
-	kv.Rewind();
+	int color = g_kvConfig.GetNum(key, -1);
+	g_kvConfig.Rewind();
 	return color;
 }
 
 public int N_IRC_GetHostMask(Handle plugin, int numParams) {
-	SetNativeString(1, cmdhostmask, GetNativeCell(2));
-	return strlen(cmdhostmask);
+	SetNativeString(1, g_sCmdHostMask, GetNativeCell(2));
+	return strlen(g_sCmdHostMask);
 }
 
 public int N_IRC_GetCmdArgString(Handle plugin, int numParams) {
-	SetNativeString(1, cmdargstring, GetNativeCell(2));
-	return strlen(cmdargstring);
+	SetNativeString(1, g_sCmdArgString, GetNativeCell(2));
+	return strlen(g_sCmdArgString);
 }
 
 public int N_IRC_GetCmdArg(Handle plugin, int numParams) {
 	char str[IRC_MAXLEN];
-	cmdargs.GetString(GetNativeCell(1), str, sizeof(str));
+	g_aCmdArgs.GetString(GetNativeCell(1), str, sizeof(str));
 	SetNativeString(2, str, GetNativeCell(3));
 	return strlen(str);
 }
@@ -589,26 +583,25 @@ public int N_IRC_ReplyToCommand(Handle plugin, int numParams) {
 
 public int N_IRC_GetNick(Handle plugin, int numParams) {
 	int maxlen = GetNativeCell(2);
-	SetNativeString(1, g_nick, maxlen);
+	SetNativeString(1, g_sNick, maxlen);
 }
 
 public int N_IRC_GetCommandArrays(Handle plugin, int numParams) {
-	ArrayList
-		  CommandsArg = GetNativeCell(1)
-		, CommandPluginsArg = GetNativeCell(2)
-		, CommandCallbacksArg = GetNativeCell(3)
-		, CommandDescriptionsArg = GetNativeCell(4);
-	char
-		  command[64]
-		, description[256];
+	ArrayList CommandsArg = GetNativeCell(1);
+	ArrayList CommandPluginsArg = GetNativeCell(2);
+	ArrayList CommandCallbacksArg = GetNativeCell(3);
+	ArrayList CommandDescriptionsArg = GetNativeCell(4);
 
-	for (int i = 0; i < CommandPlugins.Length; i++) {
-		Commands.GetString(i, command, sizeof(command));
-		CommandDescriptions.GetString(i, description, sizeof(description));
+	char command[64];
+	char description[256];
+
+	for (int i = 0; i < g_aCommandPlugins.Length; i++) {
+		g_aCommands.GetString(i, command, sizeof(command));
+		g_aCommandDescriptions.GetString(i, description, sizeof(description));
 
 		CommandsArg.PushString(command);
-		CommandPluginsArg.Push(CommandPlugins.Get(i));
-		CommandCallbacksArg.Push(CommandCallbacks.Get(i));
+		CommandPluginsArg.Push(g_aCommandPlugins.Get(i));
+		CommandCallbacksArg.Push(g_aCommandCallbacks.Get(i));
 		CommandDescriptionsArg.PushString(description);
 	}
 }
@@ -617,9 +610,9 @@ public int N_IRC_HookEvent(Handle plugin, int numParams) {
 	char ev[IRC_MAXLEN];
 	GetNativeString(1, ev, sizeof(ev));
 
-	EventPlugins.Push(plugin);
-	Events.PushString(ev);
-	EventCallbacks.Push(GetNativeCell(2));
+	g_aEventPlugins.Push(plugin);
+	g_aEvents.PushString(ev);
+	g_aEventCallbacks.Push(GetNativeCell(2));
 }
 
 public int N_IRC_RegCmd(Handle plugin, int numParams) {
@@ -628,12 +621,12 @@ public int N_IRC_RegCmd(Handle plugin, int numParams) {
 
 	GetNativeString(1, command, sizeof(command));
 	GetNativeString(3, description, sizeof(description));
-	CommandPlugins.Push(plugin);
-	Commands.PushString(command);
-	CommandCallbacks.Push(GetNativeCell(2));
-	CommandPermissions.Push(0);
-	CommandFlags.Push(GetNativeCell(4));
-	CommandDescriptions.PushString(description);
+	g_aCommandPlugins.Push(plugin);
+	g_aCommands.PushString(command);
+	g_aCommandCallbacks.Push(GetNativeCell(2));
+	g_aCommandPermissions.Push(0);
+	g_aCommandFlags.Push(GetNativeCell(4));
+	g_aCommandDescriptions.PushString(description);
 }
 
 public int N_IRC_RegAdminCmd(Handle plugin, int numParams) {
@@ -642,31 +635,31 @@ public int N_IRC_RegAdminCmd(Handle plugin, int numParams) {
 
 	GetNativeString(1, command, sizeof(command));
 	GetNativeString(4, description, sizeof(description));
-	CommandPlugins.Push(plugin);
-	Commands.PushString(command);
-	CommandCallbacks.Push(GetNativeCell(2));
-	CommandPermissions.Push(GetNativeCell(3));
-	CommandFlags.Push(GetNativeCell(5));
-	CommandDescriptions.PushString(description);
+	g_aCommandPlugins.Push(plugin);
+	g_aCommands.PushString(command);
+	g_aCommandCallbacks.Push(GetNativeCell(2));
+	g_aCommandPermissions.Push(GetNativeCell(3));
+	g_aCommandFlags.Push(GetNativeCell(5));
+	g_aCommandDescriptions.PushString(description);
 }
 
 public int N_IRC_CleanUp(Handle plugin, int numParams) {
-	for (int i = 0; i < CommandPlugins.Length; i++) {
-		if (plugin == CommandPlugins.Get(i)) {
-			CommandPlugins.Erase(i);
-			Commands.Erase(i);
-			CommandCallbacks.Erase(i);
-			CommandPermissions.Erase(i);
-			CommandDescriptions.Erase(i);
-			CommandFlags.Erase(i);
+	for (int i = 0; i < g_aCommandPlugins.Length; i++) {
+		if (plugin == g_aCommandPlugins.Get(i)) {
+			g_aCommandPlugins.Erase(i);
+			g_aCommands.Erase(i);
+			g_aCommandCallbacks.Erase(i);
+			g_aCommandPermissions.Erase(i);
+			g_aCommandDescriptions.Erase(i);
+			g_aCommandFlags.Erase(i);
 			i--;
 		}
 	}
-	for (int i = 0; i < EventPlugins.Length; i++) {
-		if (plugin == EventPlugins.Get(i)) {
-			EventPlugins.Erase(i);
-			Events.Erase(i);
-			EventCallbacks.Erase(i);
+	for (int i = 0; i < g_aEventPlugins.Length; i++) {
+		if (plugin == g_aEventPlugins.Get(i)) {
+			g_aEventPlugins.Erase(i);
+			g_aEvents.Erase(i);
+			g_aEventCallbacks.Erase(i);
 			i--;
 		}
 	}
@@ -678,12 +671,12 @@ public int N_IRC_ChannelHasFlag(Handle plugin, int numParams) {
 
 	GetNativeString(1, channel, sizeof(channel));
 	GetNativeString(2, flag, sizeof(flag));
-	if (!kv.JumpToKey("Server") || !kv.JumpToKey("channels") || !kv.JumpToKey(channel)) {
-		kv.Rewind();
+	if (!g_kvConfig.JumpToKey("Server") || !g_kvConfig.JumpToKey("channels") || !g_kvConfig.JumpToKey(channel)) {
+		g_kvConfig.Rewind();
 		return 0;
 	}
-	int result = kv.GetNum(flag, 0);
-	kv.Rewind();
+	int result = g_kvConfig.GetNum(flag, 0);
+	g_kvConfig.Rewind();
 	return result;
 }
 
@@ -695,10 +688,7 @@ public int N_IRC_GetAdminFlag(Handle plugin, int numParams) {
 	}
 	GetNativeString(1, hostmask, sizeof(hostmask));
 	int userflag = IRC_GetUserFlagBits(hostmask);
-	if (userflag & ADMFLAG_ROOT) {
-		return true;
-	}
-	if (userflag & flag) {
+	if (userflag & ADMFLAG_ROOT || userflag & flag) {
 		return true;
 	}
 	return false;
@@ -727,32 +717,32 @@ public int N_IRC_Send(Handle plugin, int numParams) {
 		return;
 	}
 
-	if ((g_connected) && (messagerate != 0.0)) {
-		if (messagetimer != null) {
-			messagequeue.PushString(buffer);
+	if ((g_bConnected) && (g_fMessageRate != 0.0)) {
+		if (g_hMessageTimer != null) {
+			g_aMessageQueue.PushString(buffer);
 			return;
 		}
-		messagetimer = CreateTimer(messagerate, MessageTimerCB);
+		g_hMessageTimer = CreateTimer(g_fMessageRate, MessageTimerCB);
 	}
 	Format(buffer, sizeof(buffer), "%s\r\n", buffer);
-	if (g_debug) {
+	if (g_iDebug) {
 		LogMessage("SEND %s", buffer);
 	}
-	SocketSend(gsocket, buffer);
+	SocketSend(g_hSocket, buffer);
 }
 
 public Action MessageTimerCB(Handle timer) {
-	messagetimer = null;
+	g_hMessageTimer = null;
 	char buffer[IRC_MAXLEN];
-	if (messagequeue.Length > 0) {
-		messagequeue.GetString(0, buffer, sizeof(buffer));
+	if (g_aMessageQueue.Length > 0) {
+		g_aMessageQueue.GetString(0, buffer, sizeof(buffer));
 		IRC_Send(buffer);
-		messagequeue.Erase(0);
+		g_aMessageQueue.Erase(0);
 	}
 }
 
 public int N_IRC_MsgFlaggedChannels(Handle plugin, int numParams) {
-	if (!g_connected) {
+	if (!g_bConnected) {
 		return 0;
 	}
 	char flag[64];
@@ -761,20 +751,20 @@ public int N_IRC_MsgFlaggedChannels(Handle plugin, int numParams) {
 
 	GetNativeString(1, flag, sizeof(flag));
 	FormatNativeString(0, 2, 3, sizeof(text), written, text);
-	if (!kv.JumpToKey("Server") || !kv.JumpToKey("channels") || !kv.GotoFirstSubKey()) {
+	if (!g_kvConfig.JumpToKey("Server") || !g_kvConfig.JumpToKey("channels") || !g_kvConfig.GotoFirstSubKey()) {
 		LogError("No channels defined in sourceirc.cfg");
 	}
 	else {
 		char channel[IRC_CHANNEL_MAXLEN];
 		do {
-			kv.GetSectionName(channel, sizeof(channel));
-			if (kv.GetNum(flag, 0)) {
+			g_kvConfig.GetSectionName(channel, sizeof(channel));
+			if (g_kvConfig.GetNum(flag, 0)) {
 				IRC_Send("PRIVMSG %s :%s", channel, text);
 			}
 		}
-		while (kv.GotoNextKey());
+		while (g_kvConfig.GotoNextKey());
 	}
-	kv.Rewind();
+	g_kvConfig.Rewind();
 	return 1;
 }
 

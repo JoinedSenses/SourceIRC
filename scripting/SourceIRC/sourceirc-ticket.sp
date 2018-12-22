@@ -21,12 +21,9 @@
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
 
-float
-	SprayLocation[MAXPLAYERS+1][3];
-char
-	ReportString[MAXPLAYERS+1][512];
-KeyValues
-	kv;
+float g_fSprayLocation[MAXPLAYERS+1][3];
+char g_sReportString[MAXPLAYERS+1][512];
+KeyValues g_kvConfig;
 
 public Plugin myinfo = {
 	name = "SourceIRC -> Ticket",
@@ -42,9 +39,9 @@ public void OnPluginStart() {
 	RegConsoleCmd("report", Command_Support);
 	RegConsoleCmd("reply", Command_Reply);
 	AddTempEntHook("Player Decal", PlayerSpray);
-	kv = new KeyValues("SourceIRC");
+	g_kvConfig = new KeyValues("SourceIRC");
 	BuildPath(Path_SM, file, sizeof(file), "configs/sourceirc.cfg");
-	kv.ImportFromFile(file);
+	g_kvConfig.ImportFromFile(file);
 }
 
 public void OnAllPluginsLoaded() {
@@ -66,28 +63,29 @@ void IRC_Loaded() {
 }
 
 public Action Command_Reply(int client, int args) {
-	char
-		Args[256]
-		, name[64]
-		, auth[64];
+	char argString[256];
+	GetCmdArgString(argString, sizeof(argString));
 
-	GetCmdArgString(Args, sizeof(Args));
-	if (StrEqual(Args, "")) {
+	if (argString[0] == '\0') {
 		return Plugin_Handled;
 	}
+
+	char name[64];
 	GetClientName(client, name, sizeof(name));
+
+	char auth[64];
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
-	IRC_MsgFlaggedChannels("ticket", "%s (%s) :  %s", name, auth, Args);
-	PrintToChat(client, "To ADMIN :  %s", Args);
+
+	IRC_MsgFlaggedChannels("ticket", "%s (%s) :  %s", name, auth, argString);
+	PrintToChat(client, "To ADMIN :  %s", argString);
 	return Plugin_Handled;
 }
 
 public Action Command_To(const char[] nick, int args) {
-	char
-		destination[64]
-		, text[IRC_MAXLEN];
-	
+	char text[IRC_MAXLEN];
 	IRC_GetCmdArgString(text, sizeof(text));
+
+	char destination[64];
 	int startpos = BreakString(text, destination, sizeof(destination));
 	int target = FindTarget(0, destination, true, false);
 	if (target != -1) {
@@ -101,7 +99,7 @@ public Action Command_To(const char[] nick, int args) {
 
 public Action PlayerSpray(const char[] te_name, const clients[], int client_count, float delay) {
 	int client = TE_ReadNum("m_nPlayer");
-	TE_ReadVector("m_vecOrigin", SprayLocation[client]);
+	TE_ReadVector("m_vecOrigin", g_fSprayLocation[client]);
 }
 
 int TraceSpray(int client) {
@@ -109,7 +107,7 @@ int TraceSpray(int client) {
 	if (GetPlayerEye(client, pos) >= 1){
 		float MaxDis = 50.0;
 		for (int i = 1; i <= MAXPLAYERS; i++) {
-			if (GetVectorDistance(pos, SprayLocation[i]) <= MaxDis) {
+			if (GetVectorDistance(pos, g_fSprayLocation[i]) <= MaxDis) {
 				return i;
 			}
 		}
@@ -118,9 +116,8 @@ int TraceSpray(int client) {
 }
 
 int GetPlayerEye(int client, float pos[3]) {
-	float
-		vAngles[3]
-		, vOrigin[3];
+	float vAngles[3];
+	float vOrigin[3];
 
 	GetClientEyePosition(client, vOrigin);
 	GetClientEyeAngles(client, vAngles);
@@ -146,33 +143,32 @@ bool TraceEntityFilterPlayer(int entity, int contentsMask) {
 public Action Command_Support(int client, int args) {
 	Menu hMenu = new Menu(MenuHandler_Report);
 	hMenu.SetTitle("What do you want to report for?");
-	if (!kv.JumpToKey("Ticket")) {
+	if (!g_kvConfig.JumpToKey("Ticket")) {
 		return;
 	}
-	if (!kv.JumpToKey("Menu")) {
+	if (!g_kvConfig.JumpToKey("Menu")) {
 		return;
 	}
-	if (!kv.GotoFirstSubKey(false)) {
+	if (!g_kvConfig.GotoFirstSubKey(false)) {
 		return;
 	}
-	char
-		key[64]
-		, value[64];
+	char key[64];
+	char value[64];
 	do {
-		kv.GetSectionName(key, sizeof(key));
-		kv.GetString(NULL_STRING, value, sizeof(value));
+		g_kvConfig.GetSectionName(key, sizeof(key));
+		g_kvConfig.GetString(NULL_STRING, value, sizeof(value));
 		hMenu.AddItem(key, value);
-	} while (kv.GotoNextKey(false));
+	} while (g_kvConfig.GotoNextKey(false));
 
-	kv.Rewind();
+	g_kvConfig.Rewind();
 
 	hMenu.Display(client, MENU_TIME_FOREVER);
 }
 
 public int MenuHandler_Report(Menu hMenu, MenuAction action, int param1, int param2) {
 	if (action == MenuAction_Select) {
-		hMenu.GetItem(param2, ReportString[param1], sizeof(ReportString[]));
-		if (StrEqual(ReportString[param1], "{Special:Spray}")) {
+		hMenu.GetItem(param2, g_sReportString[param1], sizeof(g_sReportString[]));
+		if (StrEqual(g_sReportString[param1], "{Special:Spray}")) {
 			SprayMenu(param1);
 		}
 		else {
@@ -200,38 +196,38 @@ public int MenuHandler_SprayMenu(Menu menu, MenuAction action, int param1, int p
 			SprayMenu(param1);
 		}
 		else {
-			char
-				decalfile[256]
-				, sprayurl[128];
+			char decalfile[256];
+			char sprayurl[128];
 
 			GetPlayerDecalFile(target, decalfile, sizeof(decalfile));
 			sprayurl[0] = '\x00';
-			Format(ReportString[param1], sizeof(ReportString[]), "Bad spray");
-			if ((kv.JumpToKey("Ticket")) && (kv.JumpToKey("Settings"))) {
-				kv.GetString("spray_url", sprayurl, sizeof(sprayurl), "");
+			Format(g_sReportString[param1], sizeof(g_sReportString[]), "Bad spray");
+			if ((g_kvConfig.JumpToKey("Ticket")) && (g_kvConfig.JumpToKey("Settings"))) {
+				g_kvConfig.GetString("spray_url", sprayurl, sizeof(sprayurl), "");
 				if (!StrEqual(sprayurl, "")) {
 					ReplaceString(sprayurl, sizeof(sprayurl), "{SPRAY}", decalfile);
-					StrCat(ReportString[param1], sizeof(ReportString), " ");
-					StrCat(ReportString[param1], sizeof(ReportString), sprayurl);
+					StrCat(g_sReportString[param1], sizeof(g_sReportString), " ");
+					StrCat(g_sReportString[param1], sizeof(g_sReportString), sprayurl);
 				}
 			}
-			kv.Rewind();
+			g_kvConfig.Rewind();
 
-			Report(param1, target, ReportString[param1]);
+			Report(param1, target, g_sReportString[param1]);
 		}
 	}
 }
 
 void ShowPlayerList(int client) {
-	char
-		title[256]
-		, disp[64]
-		, info[64];
-
-	Format(title, sizeof(title), "Who do you want to report for %s", ReportString[client]);
 	Menu hMenu = new Menu(MenuHandler_PlayerList);
+
+	char title[256];
+	Format(title, sizeof(title), "Who do you want to report for %s", g_sReportString[client]);
+
 	hMenu.SetTitle(title);
 	hMenu.ExitBackButton = true;
+
+	char disp[64];
+	char info[64];
 	for (int i = 1; i <= MaxClients; i++) {
 		if (IsClientConnected(i) && !IsFakeClient(i)) {
 			GetClientName(i, disp, sizeof(disp));
@@ -255,32 +251,34 @@ public int MenuHandler_PlayerList(Menu menu, MenuAction action, int param1, int 
 			PrintToChat(param1, "Player disconnected, sorry!");
 		}
 		else {
-			Report(param1, client, ReportString[param1]);
+			Report(param1, client, g_sReportString[param1]);
 		}
 	}
 }
 
 void Report(int client, int target, char[] info) {
-	char
-		name[64]
-		, auth[64]
-		, targetname[64]
-		, targetauth[64]
-		, mynick[64];
-
+	char name[64];
 	GetClientName(client, name, sizeof(name));
+
+	char auth[64];
 	GetClientAuthId(client, AuthId_Steam2, auth, sizeof(auth));
+
+	char targetname[64];
 	GetClientName(target, targetname, sizeof(targetname));
+
+	char targetauth[64];
 	GetClientAuthId(target, AuthId_Steam2, targetauth, sizeof(targetauth));
+
+	char mynick[64];
 	IRC_GetNick(mynick, sizeof(mynick));
-	if ((kv.JumpToKey("Ticket")) && (kv.JumpToKey("Settings"))) {
+	if ((g_kvConfig.JumpToKey("Ticket")) && (g_kvConfig.JumpToKey("Settings"))) {
 		char custom_msg[IRC_MAXLEN];
-		kv.GetString("custom_msg", custom_msg, sizeof(custom_msg), "");
+		g_kvConfig.GetString("custom_msg", custom_msg, sizeof(custom_msg), "");
 		if (!StrEqual(custom_msg, "")) {
 			IRC_MsgFlaggedChannels("ticket", custom_msg);
 		}
 	}
-	kv.Rewind();
+	g_kvConfig.Rewind();
 	IRC_MsgFlaggedChannels("ticket", "%s (%s) has reported %s (%s) for %s", name, auth, targetname, targetauth, info);
 	IRC_MsgFlaggedChannels("ticket", "use %s to #%d <text> - To reply", mynick, GetClientUserId(client));
 	PrintToChat(client, "\x01Your report has been sent. Type \x04/reply your text here\x01 to chat with the admins.");

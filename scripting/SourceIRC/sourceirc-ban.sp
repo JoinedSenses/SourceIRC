@@ -59,13 +59,11 @@ public Action Command_Ban(const char[] nick, int args) {
 		IRC_ReplyToCommand(nick, "Usage: ban <#userid|name> <minutes|0> [reason]");
 		return Plugin_Handled;
 	}
-	int
-		len
-		, next_len;
-	char
-		Arguments[256]
-		, arg[65]
-		, s_time[12];
+	int len;
+	int next_len;
+	char Arguments[256];
+	char arg[65];
+	char s_time[12];
 
 	IRC_GetCmdArgString(Arguments, sizeof(Arguments));
 	len = BreakString(Arguments, arg, sizeof(arg));
@@ -88,10 +86,9 @@ public Action Command_Ban(const char[] nick, int args) {
 }
 
 void PrepareBan(const char[] nick, int target, int time, const char[] reason) {
-	char
-		authid[64]
-		, name[32]
-		, hostmask[IRC_MAXLEN];
+	char authid[64];
+	char name[32];
+	char hostmask[IRC_MAXLEN];
 	
 	GetClientAuthId(target, AuthId_Steam2, authid, sizeof(authid));
 	GetClientName(target, name, sizeof(name));

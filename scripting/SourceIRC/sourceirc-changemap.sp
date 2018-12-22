@@ -60,16 +60,13 @@ public Action Command_ChangeMap(const char[] nick, int args) {
 		ForceChangeLevel(text, "Requested from IRC");
 	}
 	else {
-		char
-			storedmap[64]
-			, map[64];
-		bool
-			foundmatch;
-		ArrayList
-			maps = new ArrayList(64);
+		char storedmap[64];
+		char map[64];
+		bool foundmatch;
+		ArrayList maps = new ArrayList(ByteCountToCells(64));
 		
 		ReadMapList(maps);
-		for (int i; i < maps.Length; i++) {
+		for (int i = 0; i < maps.Length; i++) {
 			maps.GetString(i, storedmap, sizeof(storedmap));
 			if (StrContains(storedmap, text, false) != -1) {
 				if (!foundmatch) {
