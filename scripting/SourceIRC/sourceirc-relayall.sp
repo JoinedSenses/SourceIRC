@@ -161,14 +161,17 @@ public Action Event_PlayerSay(Event event, const char[] name, bool dontBroadcast
 	// --------
 	int team;
 	team = client ? IRC_GetTeamColor(GetClientTeam(client)) : 0;
+	char clientname[MAX_NAME_LENGTH];
+	Format(clientname, sizeof(clientname), "%N", client);
+	ReplaceString(clientname, sizeof(clientname), ":", "ː");
 	if (team == -1) {
-		Format(result, sizeof(result), "%s%N: %s", result, client, message);
+		Format(result, sizeof(result), "%s%s: %s", result, clientname, message);
 	}
 	else {
-		Format(result, sizeof(result), "\x03%02d%s%N\x03: %s", team, result, client, message);
+		Format(result, sizeof(result), "\x03%02d%s%s\x03: %s", team, result, clientname, message);
 	}
 
-	IRC_MsgFlaggedChannels("relay", result);
+	IRC_MsgFlaggedChannels("relay", "%s", result);
 	return Plugin_Continue;
 }
 
@@ -194,8 +197,8 @@ public Action Event_PlayerDisconnect(Event event, const char[] name, bool dontBr
 			}
 		}
 		Format(result, sizeof(result), "%t", "Player Disconnected", playername, auth, userid, reason);
-		if (!StrEqual(result, "")) {
-			IRC_MsgFlaggedChannels("relay", result);
+		if (result[0] != '\0') {
+			IRC_MsgFlaggedChannels("relay", "%s", result);
 		}
 	}
 	return Plugin_Continue;

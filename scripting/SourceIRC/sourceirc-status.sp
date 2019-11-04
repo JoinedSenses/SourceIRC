@@ -65,7 +65,7 @@ public Action Command_GameInfo(const char[] nick, int args) {
 	IRC_ReplyToCommand(nick, "udp/ip  : %s", serverdomain);
 	IRC_ReplyToCommand(nick, "map     : %s", map);
 	IRC_ReplyToCommand(nick, "nextmap : %s", nextmap);
-	IRC_ReplyToCommand(nick, "players : %d (%d max)", GetClientCount(), GetMaxClients());
+	IRC_ReplyToCommand(nick, "players : %d (%d max)", GetClientCount(), MaxClients);
 
 	int timeleft;
 	if (GetMapTimeLeft(timeleft)) {
@@ -95,7 +95,7 @@ public Action Command_Status(const char[] nick, int args) {
 	IRC_ReplyToCommand(nick, "hostname: %s", hostname);
 	IRC_ReplyToCommand(nick, "udp/ip  : %s", serverdomain);
 	IRC_ReplyToCommand(nick, "map     : %s", map);
-	IRC_ReplyToCommand(nick, "players : %d (%d max)", GetClientCount(), GetMaxClients());
+	IRC_ReplyToCommand(nick, "players : %d (%d max)", GetClientCount(), MaxClients);
 
 	char line[IRC_MAXLEN];
 	strcopy(line, sizeof(line), "# userid name uniqueid connected ping loss state");
@@ -114,7 +114,7 @@ public Action Command_Status(const char[] nick, int args) {
 	int secs;
 	int latency;
 	int loss;
-	for (int i = 1; i <= GetMaxClients(); i++) {
+	for (int i = 1; i <= MaxClients; i++) {
 		if (IsClientConnected(i)) {
 			if (IsClientAuthorized(i)) {
 				GetClientAuthId(i, AuthId_Steam2, auth, sizeof(auth));
