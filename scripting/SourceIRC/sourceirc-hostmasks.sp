@@ -18,6 +18,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
+#include <sourcemod>
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
 

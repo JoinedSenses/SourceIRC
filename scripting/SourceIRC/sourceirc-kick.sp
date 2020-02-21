@@ -17,8 +17,12 @@
 #pragma newdecls required
 #pragma semicolon 1
 #pragma dynamic 65535
+
+#include <sourcemod>
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
+
+bool g_bIRC;
 
 public Plugin myinfo = {
 	name = "SourceIRC -> Kick",
@@ -45,7 +49,14 @@ public void OnLibraryAdded(const char[] name) {
 	}
 }
 
+public void OnLibraryRemoved(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
+		g_bIRC = false;
+	}
+}
+
 void IRC_Loaded() {
+	g_bIRC = true;
 	// Call IRC_CleanUp as this function can be called more than once.
 	IRC_CleanUp();
 	IRC_RegAdminCmd("kick", Command_Kick, ADMFLAG_KICK, "kick <#userid|name> [reason] - Kicks a player from the server");
@@ -127,7 +138,9 @@ void PerformKick(const char[] hostmask, int target, const char[] reason) {
 }
 
 public void OnPluginEnd() {
-	IRC_CleanUp();
+	if (g_bIRC) {
+		IRC_CleanUp();
+	}
 }
 
 // http://bit.ly/defcon

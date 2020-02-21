@@ -24,6 +24,8 @@
 
 #pragma newdecls required
 #pragma semicolon 1
+
+#include <sourcemod>
 #include <regex>
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
@@ -31,7 +33,8 @@
 
 bool
 	  g_bShowIRC[MAXPLAYERS+1]
-	, g_bLateLoad;
+	, g_bLateLoad
+	, g_bIRC;
 ConVar
 	  g_cvAllowHide
 	, g_cvAllowFilter
@@ -111,11 +114,18 @@ public void OnLibraryAdded(const char[] name) {
 	}
 }
 
+public void OnLibraryRemoved(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
+		g_bIRC = false;
+	}
+}
+
 public void OnClientDisconnect(int client) {
   	g_bShowIRC[client] = true;
 }
 
 void IRC_Loaded() {
+	g_bIRC = true;
 	// Call IRC_CleanUp as this function can be called more than once.
 	IRC_CleanUp();
 	IRC_HookEvent("PRIVMSG", Event_PRIVMSG);
@@ -346,5 +356,7 @@ public Action cmdIRC(int client, int iArgC) {
 }
 
 public void OnPluginEnd() {
-	IRC_CleanUp();
+	if (g_bIRC) {
+		IRC_CleanUp();
+	}
 }

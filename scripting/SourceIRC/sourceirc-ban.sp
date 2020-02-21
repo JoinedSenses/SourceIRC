@@ -19,8 +19,11 @@
 #pragma semicolon 1
 #pragma dynamic 65535
 
+#include <sourcemod>
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
+
+bool g_bIRC;
 
 public Plugin myinfo = {
 	name = "SourceIRC -> Ban",
@@ -47,7 +50,14 @@ public void OnLibraryAdded(const char[] name) {
 	}
 }
 
+public void OnLibraryRemoved(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
+		g_bIRC = false;
+	}
+}
+
 void IRC_Loaded() {
+	g_bIRC = true;
 	// Call IRC_CleanUp as this function can be called more than once.
 	IRC_CleanUp();
 	IRC_RegAdminCmd("ban", Command_Ban, ADMFLAG_BAN, "ban <#userid|name> <minutes|0> [reason] - Bans a player from the server");
@@ -122,7 +132,9 @@ void PrepareBan(const char[] nick, int target, int time, const char[] reason) {
 }
 
 public void OnPluginEnd() {
-	IRC_CleanUp();
+	if (g_bIRC) {
+		IRC_CleanUp();
+	}
 }
 
 // http://bit.ly/defcon

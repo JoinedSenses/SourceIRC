@@ -34,6 +34,7 @@ public SharedPlugin __pl_sourceirc = {
 #endif
 }
 
+#if !defined REQUIRE_PLUGIN
 public void __pl_sourceirc_SetNTVOptional() {
 	MarkNativeAsOptional("IRC_RegCmd");
 	MarkNativeAsOptional("IRC_RegAdminCmd");
@@ -50,7 +51,9 @@ public void __pl_sourceirc_SetNTVOptional() {
 	MarkNativeAsOptional("IRC_GetUserFlagBits");
 	MarkNativeAsOptional("IRC_GetAdminFlag");
 	MarkNativeAsOptional("IRC_GetTeamColor");
+	MarkNativeAsOptional("IRC_MsgFlaggedChannels");
 }
+#endif
 
 /**
  * Called when an IRC command is invoked.
@@ -443,24 +446,27 @@ stock void IRC_Strip(char[] str, int maxlength) {
 		// Strip color codes
 		if (str[i] == '\x03') {
 			RemoveChar(str, maxlength, i);
-			bool ignorelast = false;
+			//bool ignorelast = false;
 
-			if (str[i] > 47 && str[i] < 58) {
+			if (47 < str[i] < 58) {
 				RemoveChar(str, maxlength, i);
-				if ((str[i] > 47 && str[i] < 58) || str[i] == ',') {
-					if (str[i] == ',') {
-						ignorelast = true;
-					}
+				if ((47 < str[i] < 58) || str[i] == ',') {
+					//if (str[i] == ',') {
+					//	ignorelast = true;
+					//}
 					RemoveChar(str, maxlength, i);
-					if ((str[i] > 47 && str[i] < 58) || str[i] == ',') {
-						RemoveChar(str, maxlength, i);
-						if (str[i] > 47 && str[i] < 58) {
-							RemoveChar(str, maxlength, i);
-							if (str[i] > 47 && str[i] < 58 && !ignorelast) {
-								RemoveChar(str, maxlength, i);
-							}
-						}
-					}
+					//if ((47 < str[i] < 58) || str[i] == ',') {
+					//	PrintToChatAll("Removing 4 %s", str[i]);
+					//	RemoveChar(str, maxlength, i);
+					//	if (47 < str[i] < 58) {
+					//		PrintToChatAll("Removing 5 %s", str[i]);
+					//		RemoveChar(str, maxlength, i);
+					//		if (47 < str[i] < 58 && !ignorelast) {
+					//			PrintToChatAll("Removing 6 %s", str[i]);
+					//			RemoveChar(str, maxlength, i);
+					//		}
+					//	}
+					//}
 				}
 			}
 			i--;

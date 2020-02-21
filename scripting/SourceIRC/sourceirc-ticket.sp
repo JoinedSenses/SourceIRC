@@ -17,6 +17,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
+#include <sourcemod>
 #include <sdktools>
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
@@ -24,6 +25,8 @@
 float g_fSprayLocation[MAXPLAYERS+1][3];
 char g_sReportString[MAXPLAYERS+1][512];
 KeyValues g_kvConfig;
+
+bool g_bIRC;
 
 public Plugin myinfo = {
 	name = "SourceIRC -> Ticket",
@@ -56,7 +59,14 @@ public void OnLibraryAdded(const char[] name) {
 	}
 }
 
+public void OnLibraryRemoved(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
+		g_bIRC = false;
+	}
+}
+
 void IRC_Loaded() {
+	g_bIRC = true;
 	// Call IRC_CleanUp as this function can be called more than once.
 	IRC_CleanUp();
 	IRC_RegAdminCmd("to", Command_To, ADMFLAG_CHAT, "to <name|#userid> <text> - Send a message to a player");
@@ -285,7 +295,9 @@ void Report(int client, int target, char[] info) {
 }
 
 public void OnPluginEnd() {
-	IRC_CleanUp();
+	if (g_bIRC) {
+		IRC_CleanUp();
+	}
 }
 
 // http://bit.ly/defcon

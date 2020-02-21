@@ -16,6 +16,8 @@
 */
 #pragma newdecls required
 #pragma semicolon 1
+
+#include <sourcemod>
 #include <socket>
 #undef REQUIRE_PLUGIN
 #include <sourceirc>
@@ -27,6 +29,7 @@ int g_iRequestId;
 bool g_bBusy;
 char g_sReplyNick[64];
 char g_sCommand[256];
+bool g_bIRC;
 
 public Plugin myinfo = {
 	name = "SourceIRC -> RCON",
@@ -48,7 +51,14 @@ public void OnLibraryAdded(const char[] name) {
 	}
 }
 
+public void OnLibraryRemoved(const char[] name) {
+	if (StrEqual(name, "sourceirc")) {
+		g_bIRC = false;
+	}
+}
+
 void IRC_Loaded() {
+	g_bIRC = true;
 	// Call IRC_CleanUp as this function can be called more than once.
 	IRC_CleanUp();
 	IRC_RegAdminCmd("rcon", Command_RCON, ADMFLAG_RCON, "rcon <command> - Run an rcon command on the server.");
@@ -155,7 +165,9 @@ void Send(int type, const char[] format, any ...) {
 }
 
 public void OnPluginEnd() {
-	IRC_CleanUp();
+	if (g_bIRC) {
+		IRC_CleanUp();
+	}
 }
 
 // http://bit.ly/defcon
