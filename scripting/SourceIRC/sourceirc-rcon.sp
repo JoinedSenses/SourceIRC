@@ -22,7 +22,7 @@
 #define SERVERDATA_EXECCOMMAND 2
 #define SERVERDATA_AUTH 3
 
-Handle g_hSocket;
+Socket g_hSocket;
 int g_iRequestId;
 bool g_bBusy;
 char g_sReplyNick[64];
@@ -74,8 +74,8 @@ void Connect() {
                                                       (iIp >>  8) & 0x000000FF,
                                                       (iIp >>  0) & 0x000000FF);
 	int ServerPort = FindConVar("hostport").IntValue;
-	g_hSocket = SocketCreate(SOCKET_TCP, OnSocketError);
-	SocketConnect(g_hSocket, OnSocketConnect, OnSocketReceive, OnSocketDisconnected, ServerIp, ServerPort);
+	g_hSocket = new Socket(SOCKET_TCP, OnSocketError);
+	g_hSocket.Connect(OnSocketConnect, OnSocketReceive, OnSocketDisconnected, ServerIp, ServerPort);
 }
 
 public void OnSocketConnect(Handle socket, any arg) {
@@ -111,7 +111,7 @@ public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSiz
 				IRC_ReplyToCommand(g_sReplyNick, "%s", lines[l]);
 			}
 			g_bBusy = false;
-			SocketDisconnect(g_hSocket);
+			g_hSocket.Disconnect();
 			g_iRequestId = 0;
 			delete socket;
 		}
@@ -151,7 +151,7 @@ void Send(int type, const char[] format, any ...) {
 	VFormat(command, sizeof(command), format, 2);
 	int num = strlen(command)+10;
 	Format(packet, sizeof(packet), "%c%c%c%c%c%c%c%c%c%c%c%c%s\x00\x00", num&0xFF, num >> 8&0xFF, num >> 16&0xFF, num >> 24&0xFF, g_iRequestId&0xFF, g_iRequestId >> 8&0xFF, g_iRequestId >> 16&0xFF, g_iRequestId >> 24&0xFF, type&0xFF, type >> 8&0xFF, type >> 16&0xFF, type >> 24&0xFF, command);
-	SocketSend(g_hSocket, packet, strlen(command)+14);
+	g_hSocket.Send(packet, strlen(command)+14);
 }
 
 public void OnPluginEnd() {

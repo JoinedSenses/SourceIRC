@@ -20,11 +20,12 @@
 #include <socket>
 #include <sourceirc>
 
-Handle
+Socket
 	// Global socket handle for the IRC connection
-	  g_hSocket
+	  g_hSocket;
+Handle
 	// Queue for rate limiting	
-	, g_hMessageTimer;
+	  g_hMessageTimer;
 KeyValues
 	// Global keyvalues handle for the config file
 	  g_kvConfig;
@@ -172,8 +173,8 @@ void Connect() {
 	}
 	int port = g_kvConfig.GetNum("port", 6667);
 	g_kvConfig.Rewind();
-	g_hSocket = SocketCreate(SOCKET_TCP, OnSocketError);
-	SocketConnect(g_hSocket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, server, port);
+	g_hSocket = new Socket(SOCKET_TCP, OnSocketError);
+	g_hSocket.Connect(OnSocketConnected, OnSocketReceive, OnSocketDisconnected, server, port);
 }
 
 public void OnSocketConnected(Handle socket, any arg) {
@@ -728,7 +729,8 @@ public int N_IRC_Send(Handle plugin, int numParams) {
 	if (g_iDebug) {
 		LogMessage("SEND %s", buffer);
 	}
-	SocketSend(g_hSocket, buffer);
+	
+	g_hSocket.Send(buffer);
 }
 
 public Action MessageTimerCB(Handle timer) {
