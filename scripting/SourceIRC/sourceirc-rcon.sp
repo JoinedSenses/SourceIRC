@@ -79,10 +79,16 @@ public Action Command_RCON(const char[] nick, int args) {
 void Connect() {
 	char ServerIp[16];
 	int iIp = FindConVar("hostip").IntValue;
-	Format(ServerIp, sizeof(ServerIp), "%i.%i.%i.%i", (iIp >> 24) & 0x000000FF,
-                                                      (iIp >> 16) & 0x000000FF,
-                                                      (iIp >>  8) & 0x000000FF,
-                                                      (iIp >>  0) & 0x000000FF);
+	FormatEx(
+		ServerIp,
+		sizeof(ServerIp),
+		"%i.%i.%i.%i",
+		(iIp >> 24) & 0x000000FF,
+		(iIp >> 16) & 0x000000FF,
+		(iIp >>  8) & 0x000000FF,
+		(iIp >>  0) & 0x000000FF
+	);
+
 	int ServerPort = FindConVar("hostport").IntValue;
 	g_hSocket = new Socket(SOCKET_TCP, OnSocketError);
 	g_hSocket.Connect(OnSocketConnect, OnSocketReceive, OnSocketDisconnected, ServerIp, ServerPort);
@@ -91,7 +97,7 @@ void Connect() {
 public void OnSocketConnect(Handle socket, any arg) {
 	char rcon_password[256];
 	FindConVar("rcon_password").GetString(rcon_password, sizeof(rcon_password));
-	if (StrEqual(rcon_password, "")) {
+	if (rcon_password[0] == '\0') {
 		SetFailState("You need to enable RCON to use this plugin");
 	}
 	// Escape out any percent symbols that should happen to be in the password
@@ -114,6 +120,7 @@ public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSiz
 				IRC_ReplyToCommand(g_sReplyNick, "Unable to connect to RCON");
 			}
 		}
+
 		if (serverdata == 0 && requestid > 1) {
 			char lines[64][256];
 			int linecount = ExplodeString(receiveData[i+12], "\n", lines, sizeof(lines), sizeof(lines[]));
@@ -125,6 +132,7 @@ public void OnSocketReceive(Handle socket, char[] receiveData, const int dataSiz
 			g_iRequestId = 0;
 			delete socket;
 		}
+
 		i += packetlen+4;
 	}
 }
@@ -139,28 +147,48 @@ public void OnSocketError(Handle socket, const int errorType, const int errorNum
 	delete socket;
 }
 
-int ReadByte(char[] recieveData) {
+int ReadByte(const char[] recieveData) {
 	int numbers[4];
 	int number;
 
 	for (int i; i <= 3; i++) {
 		numbers[i] = recieveData[i];
 	}
+
 	number += numbers[0];
 	number += numbers[1]<<8;
 	number += numbers[2]<<16;
 	number += numbers[3]<<24;
+
 	return number;
 }
 
 void Send(int type, const char[] format, any ...) {
 	g_iRequestId++;
-	char packet[1024];
-	char command[1014];
+	char packet[2048];
+	char command[2048];
 
 	VFormat(command, sizeof(command), format, 2);
 	int num = strlen(command)+10;
-	Format(packet, sizeof(packet), "%c%c%c%c%c%c%c%c%c%c%c%c%s\x00\x00", num&0xFF, num >> 8&0xFF, num >> 16&0xFF, num >> 24&0xFF, g_iRequestId&0xFF, g_iRequestId >> 8&0xFF, g_iRequestId >> 16&0xFF, g_iRequestId >> 24&0xFF, type&0xFF, type >> 8&0xFF, type >> 16&0xFF, type >> 24&0xFF, command);
+	FormatEx(
+		packet,
+		sizeof(packet),
+		"%c%c%c%c%c%c%c%c%c%c%c%c%s\x00\x00",
+		num&0xFF,
+		num >> 8&0xFF,
+		num >> 16&0xFF,
+		num >> 24&0xFF,
+		g_iRequestId&0xFF,
+		g_iRequestId >> 8&0xFF,
+		g_iRequestId >> 16&0xFF,
+		g_iRequestId >> 24&0xFF,
+		type&0xFF,
+		type >> 8&0xFF,
+		type >> 16&0xFF,
+		type >> 24&0xFF,
+		command
+	);
+	
 	g_hSocket.Send(packet, strlen(command)+14);
 }
 
