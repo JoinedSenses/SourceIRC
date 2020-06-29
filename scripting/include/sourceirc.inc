@@ -15,7 +15,7 @@
     along with SourceIRC.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define IRC_VERSION "0.3 (build 18)"
+#define IRC_VERSION "0.3.19"
 
 #define IRC_CMD_MAXLEN 64 // The maximum length of a command
 #define IRC_NICK_MAXLEN 64 // The maximum length of a nickname

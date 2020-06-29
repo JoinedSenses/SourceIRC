@@ -77,19 +77,19 @@ public void OnPluginStart() {
 	LoadTranslations("sourceirc.phrases");
 
 	g_aCommandPlugins = new ArrayList();
-	g_aCommands = new ArrayList(IRC_CMD_MAXLEN);
+	g_aCommands = new ArrayList(ByteCountToCells(IRC_CMD_MAXLEN));
 	g_aCommandCallbacks = new ArrayList();
-	g_aCommandDescriptions = new ArrayList(256);
+	g_aCommandDescriptions = new ArrayList(ByteCountToCells(256));
 	g_aCommandFlags = new ArrayList();
 	g_aCommandPermissions = new ArrayList();
 
 	g_aEventPlugins = new ArrayList();
-	g_aEvents = new ArrayList(IRC_MAXLEN);
+	g_aEvents = new ArrayList(ByteCountToCells(IRC_MAXLEN));
 	g_aEventCallbacks = new ArrayList();
 
-	g_aMessageQueue = new ArrayList(IRC_MAXLEN);
+	g_aMessageQueue = new ArrayList(ByteCountToCells(IRC_MAXLEN));
 
-	g_aCmdArgs = new ArrayList(IRC_MAXLEN);
+	g_aCmdArgs = new ArrayList(ByteCountToCells(IRC_MAXLEN));
 
 	g_bConnected = false;
 	RegAdminCmd("irc_send", Command_Send, ADMFLAG_RCON, "irc_send <message>");
