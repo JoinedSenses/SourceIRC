@@ -33,6 +33,7 @@ public Plugin myinfo = {
 }
 
 public void OnConfigsExecuted() {
+	delete g_kvConfig;
 	g_kvConfig = new KeyValues("SourceIRC");
 	char file[512];
 	BuildPath(Path_SM, file, sizeof(file), "configs/sourceirc.cfg");
