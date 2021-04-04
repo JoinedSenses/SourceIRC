@@ -304,7 +304,7 @@ void HandleLine(char[] prefix, ArrayList args) {
 			if (StrEqual(message[1], "VERSION", false)) {
 				IRC_Send("NOTICE %s :\x01VERSION SourceIRC v%s - IRC Relay for source engine servers. http://azelphur.com/project/sourceirc\x01", nick, IRC_VERSION);
 			}
-			if (StrEqual(message[1], "PING", false)) {
+			else if (StrEqual(message[1], "PING", false)) {
 				IRC_Send("NOTICE %s :\x01PONG\x01", nick);
 			}
 			return;
@@ -439,7 +439,7 @@ void RunCommand(const char[] hostmask, const char[] message) {
 				if (result == Plugin_Handled) {
 					IsPlugin_Handled = true;
 				}
-				if (result == Plugin_Stop) {
+				else if (result == Plugin_Stop) {
 					return;
 				}
 			}
@@ -717,7 +717,7 @@ public int N_IRC_Send(Handle plugin, int numParams) {
 
 	FormatNativeString(0, 1, 2, sizeof(buffer), written, buffer);
 	if (StrContains(buffer, "\n") != -1 || StrContains(buffer, "\r") != -1) {
-		ThrowNativeError(1, "String contains \n or \r");
+		ThrowNativeError(1, "String contains \\n or \\r");
 		return;
 	}
 
